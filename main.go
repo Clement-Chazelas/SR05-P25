@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -9,7 +10,11 @@ import (
 	"encoding/binary"
 	"encoding/gob"
 	"encoding/json"
+	"flag"
 	"fmt"
+	"os"
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -261,8 +266,143 @@ func ReceiveBlock(data string) Block {
 	return Serializable.ToBlock()
 }
 
+type MessageType string
+
+const (
+	Request     MessageType = "request"
+	Release     MessageType = "release"
+	Acknowledge MessageType = "ack"
+)
+
+type Message struct {
+	Type      MessageType
+	Timestamp int
+	SenderID  int
+}
+
+type Site struct {
+	ID       int
+	Tab      map[int]Message // Table of received messages
+	Clock    int             // Logical clock
+	Mutex    sync.Mutex      // Protect concurrent access
+	Incoming chan Message    // Channel for receiving messages
+}
+
+func NewSite(id int) *Site {
+	tab := make(map[int]Message)
+
+	return &Site{
+		ID:       id,
+		Tab:      tab,
+		Clock:    0,
+		Incoming: make(chan Message, 100),
+	}
+}
+
+func (s *Site) SendMessage(msg Message, sites []*Site) {
+	for _, site := range sites {
+		if site.ID != s.ID {
+			site.Incoming <- msg
+		}
+	}
+}
+
+func (s *Site) HandleMessages(sites []*Site) {
+	for msg := range s.Incoming {
+		s.Mutex.Lock()
+		s.Clock = max(s.Clock, msg.Timestamp) + 1
+		s.Tab[msg.SenderID] = msg
+
+		if msg.Type == Request {
+			ack := Message{Type: Acknowledge, Timestamp: s.Clock, SenderID: s.ID}
+			s.SendMessage(ack, sites)
+		}
+		s.Mutex.Unlock()
+	}
+}
+
+func (s *Site) RequestCriticalSection(sites []*Site) {
+	s.Mutex.Lock()
+	s.Clock++
+	s.Tab[s.ID] = Message{Type: Request, Timestamp: s.Clock, SenderID: s.ID}
+	request := Message{Type: Request, Timestamp: s.Clock, SenderID: s.ID}
+	s.SendMessage(request, sites)
+	s.Mutex.Unlock()
+
+	for {
+		s.Mutex.Lock()
+		canEnter := true
+		for _, msg := range s.Tab {
+			if msg.Type == Request && (msg.Timestamp < s.Tab[s.ID].Timestamp || (msg.Timestamp == s.Tab[s.ID].Timestamp && msg.SenderID < s.ID)) {
+				canEnter = false
+				break
+			}
+		}
+		s.Mutex.Unlock()
+		if canEnter {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func (s *Site) ReleaseCriticalSection(sites []*Site) {
+	s.Mutex.Lock()
+	s.Clock++
+	s.Tab[s.ID] = Message{Type: Release, Timestamp: s.Clock, SenderID: s.ID}
+	release := Message{Type: Release, Timestamp: s.Clock, SenderID: s.ID}
+	s.SendMessage(release, sites)
+	s.Mutex.Unlock()
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func (s *Site) AddBlockWithMutex(blockchain *Blockchain, block Block, sites []*Site) {
+	s.RequestCriticalSection(sites)
+	blockchain.AddBlock(block)
+	s.ReleaseCriticalSection(sites)
+}
+
 func main() {
-	//Attention au \n dans les sends
+	// On récupère le nom du site à partir des arguments de la ligne de commande
+	var siteName string
+	flag.StringVar(&siteName, "n", "site", "Nom du site")
+	flag.Parse()
+
+	// On initialise le site
+	siteID := 0 // On assigne un ID pour le site (à réndomiser ou à lire depuis la ligne de commande)
+	site := NewSite(siteID)
+
+	// On écoute les messages entrants sur le canal d'entrée
+	go func() {
+		scanner := bufio.NewScanner(os.Stdin)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+
+			// On parse le message JSON
+			var msg Message
+			if err := json.Unmarshal([]byte(line), &msg); err != nil {
+				fmt.Println("Error parsing message:", err)
+				continue
+			}
+
+			// Et on envoie le message au canal d'entrée du site
+			site.Incoming <- msg
+		}
+	}()
+
+	// Gestion des messages entrants
+	go site.HandleMessages(nil)
+
+	// Simulation de la création d'une blockchain et d'une transaction
 	blockchain := Blockchain{}
 
 	U1PrivKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -271,25 +411,13 @@ func main() {
 	U2PrivKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	U2PubKey := U2PrivKey.PublicKey
 
-	strKey := SendPublicKey(&U1PubKey)
-	U1Copy := ReceivePublicKey(strKey)
-
 	var block Block
 	var utxos UTXOSet
 
-	var utxo1 UTXO
+	utxo1 := UTXO{Owner: U1PubKey, Amount: 10}
+	utxo2 := UTXO{Owner: U2PubKey, Amount: 10}
 
-	utxo1.Owner = U1PubKey
-	utxo1.Amount = 10
-
-	var utxo2 UTXO
-
-	utxo2.Owner = U2PubKey
-	utxo2.Amount = 10
-
-	utxos.Utxos = append(utxos.Utxos, utxo1)
-	utxos.Utxos = append(utxos.Utxos, utxo2)
-
+	utxos.Utxos = append(utxos.Utxos, utxo1, utxo2)
 	block.UTXOs = utxos
 	block.Timestamp = time.Now()
 	block.MineBlock()
@@ -299,49 +427,23 @@ func main() {
 	transac := InitTransaction(U1PubKey, U2PubKey, 10)
 	transac.Sign(U1PrivKey)
 
-	concat := transac.Concatenate()
-	hash := sha256.Sum256(concat)
-	if ecdsa.VerifyASN1(&U1Copy, hash[:], transac.Signature) {
-		fmt.Println("réussi")
-	} else {
-		fmt.Println("raté")
-	}
-
-	a := blockchain.GetLastBlock().UTXOs.FindByKey(U1Copy)
-	if a != nil {
-		fmt.Println("réussi")
-	} else {
-		fmt.Println("raté")
-	}
-
-	/*transSTR := SendTransaction(&transac)
-	fmt.Println(transSTR)
-	newTrans := ReceiveTransaction(transSTR)*/
-
-	if transac.Verify(&blockchain) {
-		fmt.Println("Transaction verified")
-	} else {
-		fmt.Println("Transaction not verified")
-	}
-
-	var transactions []Transaction
-
-	transactions = append(transactions, transac)
+	transactions := []Transaction{transac}
 	newblock := InitBlock(transactions, blockchain.GetLastBlock().Hash, blockchain.GetLastBlock().UTXOs)
-
 	newblock.MineBlock()
 
-	blockStr := SendBlock(&newblock)
-	newblockCopy := ReceiveBlock(blockStr)
+	// On ajoute le bloc à la blockchain
+	go site.AddBlockWithMutex(&blockchain, newblock, nil)
 
-	fmt.Println(blockStr)
-	//fmt.Println(newblock.UTXOs.FindByKey(U2PubKey).Amount)
-	if newblockCopy.VerifyBlock(blockchain) {
-		fmt.Println("New block verified")
-	} else {
-		fmt.Println("New block not verified")
+	//On écruit dans le canal de sortie
+	for {
+		select {
+		case msg := <-site.Incoming:
+			data, err := json.Marshal(msg)
+			if err != nil {
+				fmt.Println("Error serializing message:", err)
+				continue
+			}
+			fmt.Println(string(data))
+		}
 	}
-
-	blockchain.AddBlock(newblock)
-
 }
