@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/cnf/structhash"
-	"os"
 	"time"
 )
 
@@ -100,7 +99,7 @@ func (block *Block) MineBlock() {
 			block.Nonce = i
 			block.Hash = hash
 
-			l.Printf("%d temps de minage %s\n", os.Getpid(), time.Since(heureDebut))
+			l.Printf("%s temps de minage %s\n", Nom, time.Since(heureDebut))
 			break
 		}
 
@@ -278,88 +277,3 @@ func ReceiveBlock(data string) Block {
 	}
 	return Serializable.ToBlock()
 }
-
-/*func main() {
-	//Attention au \n dans les sends
-	blockchain := Blockchain{}
-
-	U1PrivKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	U1PubKey := U1PrivKey.PublicKey
-
-	U2PrivKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	U2PubKey := U2PrivKey.PublicKey
-
-	strKey := SendPublicKey(&U1PubKey)
-	U1Copy := ReceivePublicKey(strKey)
-
-	var block Block
-	var utxos UTXOSet
-
-	var utxo1 UTXO
-
-	utxo1.Owner = U1PubKey
-	utxo1.Amount = 10
-
-	var utxo2 UTXO
-
-	utxo2.Owner = U2PubKey
-	utxo2.Amount = 10
-
-	utxos.Utxos = append(utxos.Utxos, utxo1)
-	utxos.Utxos = append(utxos.Utxos, utxo2)
-
-	block.UTXOs = utxos
-	block.Timestamp = time.Now()
-	block.MineBlock()
-
-	blockchain.AddBlock(block)
-
-	transac := InitTransaction(U1PubKey, U2PubKey, 10)
-	transac.Sign(U1PrivKey)
-
-	concat := transac.Concatenate()
-	hash := sha256.Sum256(concat)
-	if ecdsa.VerifyASN1(&U1Copy, hash[:], transac.Signature) {
-		fmt.Println("réussi")
-	} else {
-		fmt.Println("raté")
-	}
-
-	a := blockchain.GetLastBlock().UTXOs.FindByKey(U1Copy)
-	if a != nil {
-		fmt.Println("réussi")
-	} else {
-		fmt.Println("raté")
-	}
-
-	transSTR := SendTransaction(&transac)
-	fmt.Println(transSTR)
-	newTrans := ReceiveTransaction(transSTR)
-
-	if transac.Verify(&blockchain) {
-		fmt.Println("Transaction verified")
-	} else {
-		fmt.Println("Transaction not verified")
-	}
-
-	var transactions []Transaction
-
-	transactions = append(transactions, transac)
-	newblock := InitBlock(transactions, blockchain.GetLastBlock().Hash, blockchain.GetLastBlock().UTXOs)
-
-	newblock.MineBlock()
-
-	blockStr := SendBlock(&newblock)
-	newblockCopy := ReceiveBlock(blockStr)
-
-	fmt.Println(blockStr)
-	//fmt.Println(newblock.UTXOs.FindByKey(U2PubKey).Amount)
-	if newblockCopy.VerifyBlock(blockchain) {
-		fmt.Println("New block verified")
-	} else {
-		fmt.Println("New block not verified")
-	}
-
-	blockchain.AddBlock(newblock)
-
-}*/
