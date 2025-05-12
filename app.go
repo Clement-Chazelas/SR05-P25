@@ -21,10 +21,10 @@ var pendingTransactions []Transaction
 var sitePrivKey, _ = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 var sitePubKey = sitePrivKey.PublicKey
 
-var nbSite = 2
+var nbSite = 3
 var allowSC = false
 
-var pNom = flag.String("n", "controle", "Nom")
+var pNom = flag.String("n", "app", "Nom")
 var Nom = *pNom + "-" + strconv.Itoa(os.Getpid())
 
 var l = log.New(os.Stderr, "", 0)
@@ -33,7 +33,7 @@ func sendInitialisation() {
 	isKeySent := false
 	for {
 		if !isKeySent {
-			//J'envoi ma clé aux autres sites (une seule fois)
+			//J'envoie ma clé aux autres sites (une seule fois)
 			mutex.Lock()
 
 			l.Println(Nom, sitePubKey)
@@ -189,6 +189,17 @@ var mutex = &sync.Mutex{}
 
 func main() {
 	flag.Parse()
+	var rcvmsg string
+
+	for {
+		fmt.Scanln(&rcvmsg)
+		if rcvmsg == "CONT:start" {
+			break
+		}
+	}
+
+	time.Sleep(time.Duration(1) * time.Second)
+	l.Println(Nom, "Je commence mon initialisation")
 
 	go sendInitialisation()
 	go receive()
