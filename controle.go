@@ -26,7 +26,7 @@ var pNom = flag.String("n", "controle", "Nom")
 var Nom = *pNom + "-" + strconv.Itoa(pid)
 
 var MyId = -1
-var NbSite = 2
+var NbSite = 3
 
 const (
 	MsgSender     string = "sdr"
@@ -67,6 +67,36 @@ func findval(msg string, key string) string {
 
 }
 
+func initialisation() {
+	// Initialisation -> remplissage du tableau Sites avec les noms des autres controleurs
+	var rcvmsg string
+
+	Sites = append(Sites, Nom)
+	fmt.Println(Nom)
+
+	display_d("initialisation", "Début")
+
+	for len(Sites) < NbSite {
+		fmt.Scanln(&rcvmsg)
+		if rcvmsg == Nom {
+			continue
+		}
+		Sites = append(Sites, rcvmsg)
+		fmt.Println(rcvmsg)
+	}
+
+	display_d("initialisation", "Fin")
+
+	//Le tableau Sites est trié par ordre alphabétique, l'indice du Nom dans le tableau = id du site
+	sort.Strings(Sites)
+	MyId = sort.SearchStrings(Sites, Nom)
+
+	display_d("initialisation", strconv.Itoa(MyId))
+
+	fmt.Printf("CONT:start\n")
+	return
+}
+
 func main() {
 	//Il ne faut pas oublier que le canal ctrleur -> app et ctlreur -> ctrl est le même
 	//Il faut donc trier les messages à la lecture que ce soit coté ctrleur ou app
@@ -75,17 +105,18 @@ func main() {
 
 	flag.Parse()
 
-	// Initialisation -> remplissage du tableau Sites avec les noms des autres controleurs
-
-	//Le tableau Sites est trié par ordre alphabétique, l'indice du Nom dans le tableau = id du site
-	sort.Strings(Sites)
-	MyId = sort.SearchStrings(Sites, Nom)
+	initialisation()
 
 	for {
 
 		fmt.Scanln(&rcvmsg)
 
 		display_d("main", "réception de "+rcvmsg)
+
+		rcvSdr := findval(rcvmsg, MsgSender)
+		if rcvSdr == Nom {
+			continue
+		}
 
 		rcvCat := findval(rcvmsg, MsgCategory)
 		// Si champ Catégorie est présent -> le msg vient d'un autre controleur
@@ -96,10 +127,13 @@ func main() {
 				rcvData := findval(rcvmsg, MsgData)
 				//Envoi de la donnée reçue à l'application
 				fmt.Printf("CONT:%s\n", rcvData)
+				fmt.Println(rcvmsg)
 				break
 
 			case file:
 				ReceiveFileMessage(rcvmsg)
+				// Peut-être renvoyer le message reçu (si anneau unidirectionnel)
+				fmt.Println(rcvmsg)
 				break
 
 			case snapshot:
@@ -132,14 +166,14 @@ func main() {
 }
 
 func display_d(where string, what string) {
-	stderr.Printf("%s + [%.6s %d] %-8.8s : %s\n%s", vert, *pNom, pid, where, what, raz)
+	stderr.Printf("%s + [%s] %-8.8s : %s\n%s", vert, Nom, where, what, raz)
 }
 
 func display_w(where string, what string) {
 
-	stderr.Printf("%s * [%.6s %d] %-8.8s : %s\n%s", orange, *pNom, pid, where, what, raz)
+	stderr.Printf("%s * [%s] %-8.8s : %s\n%s", orange, Nom, where, what, raz)
 }
 
 func display_e(where string, what string) {
-	stderr.Printf("%s ! [%.6s %d] %-8.8s : %s\n%s", rouge, *pNom, pid, where, what, raz)
+	stderr.Printf("%s ! [%s] %-8.8s : %s\n%s", rouge, Nom, where, what, raz)
 }
