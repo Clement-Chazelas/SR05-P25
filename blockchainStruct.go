@@ -31,7 +31,7 @@ func (blockchain *Blockchain) InitBlockchain(keys []ecdsa.PublicKey) {
 	var firstBlock Block
 	var utxoSet UTXOSet
 	for _, key := range keys {
-		utxoSet.Utxos = append(utxoSet.Utxos, UTXO{key, 10})
+		utxoSet.Utxos = append(utxoSet.Utxos, UTXO{key, 1000})
 	}
 	firstBlock.UTXOs = utxoSet
 	firstBlock.Timestamp = time.Now()
