@@ -53,12 +53,10 @@ func findval(msg string, key string) string {
 		return ""
 	}
 
-	sep := msg[0:1]
-	tab_allkeyvals := strings.Split(msg[1:], sep)
+	tab_allkeyvals := strings.Split(msg[1:], fieldsep)
 
 	for _, keyval := range tab_allkeyvals {
-		equ := keyval[0:1]
-		tabkeyval := strings.Split(keyval[1:], equ)
+		tabkeyval := strings.Split(keyval[1:], keyvalsep)
 		if tabkeyval[0] == key {
 			return tabkeyval[1]
 		}
@@ -111,7 +109,7 @@ func main() {
 
 		fmt.Scanln(&rcvmsg)
 
-		display_d("main", "réception de "+rcvmsg)
+		//display_d("main", "réception de "+rcvmsg)
 
 		rcvSdr := findval(rcvmsg, MsgSender)
 		if rcvSdr == Nom {
