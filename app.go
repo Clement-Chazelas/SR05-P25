@@ -24,8 +24,7 @@ var sitePubKey = sitePrivKey.PublicKey
 var nbSite = 3
 var allowSC = false
 
-var pNom = flag.String("n", "app", "Nom")
-var Nom = *pNom + "-" + strconv.Itoa(os.Getpid())
+var Nom string
 
 var l = log.New(os.Stderr, "", 0)
 
@@ -85,6 +84,7 @@ func sendMain() {
 				allowSC = false
 				isSCAsked = false
 				fmt.Printf("FILE:finSC\n")
+				l.Println(Nom, "Fin de Section critique")
 
 				mutex.Unlock()
 				pendingTransactions = []Transaction{}
@@ -94,6 +94,7 @@ func sendMain() {
 				// On ne demande qu'une seule fois l'accès à la section critique
 				fmt.Printf("FILE:demandeSC\n")
 				isSCAsked = true
+				l.Println(Nom, "Demande Section critique")
 
 				time.Sleep(time.Duration(2) * time.Second)
 			} else {
@@ -188,8 +189,12 @@ func receive() {
 var mutex = &sync.Mutex{}
 
 func main() {
-	flag.Parse()
 	var rcvmsg string
+
+	pNom := flag.String("n", "app", "Nom")
+	flag.Parse()
+
+	Nom = *pNom + "-" + strconv.Itoa(os.Getpid())
 
 	for {
 		fmt.Scanln(&rcvmsg)
