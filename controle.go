@@ -82,13 +82,13 @@ func initialisation() {
 		fmt.Println(rcvmsg)
 	}
 
-	display_d("initialisation", "Fin")
-
 	//Le tableau Sites est trié par ordre alphabétique, l'indice du Nom dans le tableau = id du site
 	sort.Strings(Sites)
 	MyId = sort.SearchStrings(Sites, Nom)
 
-	display_d("initialisation", strconv.Itoa(MyId))
+	display_d("initialisation", fmt.Sprintf("Mon id est %d", MyId))
+
+	display_d("initialisation", "Fin")
 
 	fmt.Printf("CONT:start\n")
 	return
@@ -113,6 +113,7 @@ func main() {
 
 		rcvSdr := findval(rcvmsg, MsgSender)
 		if rcvSdr == Nom {
+			//Je ne traite pas un message que j'ai envoyé me revenant (anneau unidirectionnel)
 			continue
 		}
 
@@ -125,12 +126,15 @@ func main() {
 				rcvData := findval(rcvmsg, MsgData)
 				//Envoi de la donnée reçue à l'application
 				fmt.Printf("CONT:%s\n", rcvData)
+
+				// Renvoyer le message reçu (car anneau unidirectionnel)
 				fmt.Println(rcvmsg)
 				break
 
 			case file:
 				ReceiveFileMessage(rcvmsg)
-				// Peut-être renvoyer le message reçu (si anneau unidirectionnel)
+
+				// Renvoyer le message reçu (car anneau unidirectionnel)
 				fmt.Println(rcvmsg)
 				break
 
