@@ -99,7 +99,7 @@ func (block *Block) MineBlock() {
 			block.Nonce = i
 			block.Hash = hash
 
-			l.Printf("%s temps de minage %s\n", Nom, time.Since(heureDebut))
+			stdverb.Printf("%s temps de minage %s\n", Nom, time.Since(heureDebut))
 			break
 		}
 
@@ -120,7 +120,7 @@ func (block *Block) VerifyBlock(chain Blockchain) bool {
 	// Vérification des transactions
 	for _, tx := range block.Transactions {
 		if !tx.Verify(&chain) {
-			l.Println("Transaction verification failed")
+			stderr.Println("Transaction verification failed")
 			return false
 		}
 	}
@@ -133,6 +133,24 @@ func (block *Block) VerifyBlock(chain Blockchain) bool {
 	}
 
 	return true
+}
+
+func (block *Block) updateTransactionsFromBlock(transactions []Transaction) []Transaction {
+	var newTransactions []Transaction
+	for _, tx := range transactions {
+		isInside := false
+		for _, txBlock := range block.Transactions {
+			if bytes.Equal(tx.Signature, txBlock.Signature) {
+				isInside = true
+				break
+			}
+		}
+		if !isInside {
+			newTransactions = append(newTransactions, tx)
+		}
+	}
+	return newTransactions
+
 }
 
 type Transaction struct {
@@ -182,14 +200,14 @@ func (transaction *Transaction) Verify(chain *Blockchain) bool {
 	hash := structhash.Sha256(transaction, 1)
 	//hash := sha256.Sum256(concat)
 	if !ecdsa.VerifyASN1(&transaction.Sender, hash[:], transaction.Signature) {
-		l.Println("Signature verification failed")
+		stderr.Println("Signature verification failed")
 		return false
 	}
 
 	//Verif que le send à l'argent
 	senderUTXO := chain.GetLastBlock().UTXOs.FindByKey(transaction.Sender)
 	if senderUTXO.Amount < transaction.Amount {
-		l.Println("Not enough UTXO")
+		stderr.Println("Not enough UTXO")
 		return false
 	}
 	return true
@@ -277,3 +295,88 @@ func ReceiveBlock(data string) Block {
 	}
 	return Serializable.ToBlock()
 }
+
+/*func main() {
+	//Attention au \n dans les sends
+	blockchain := Blockchain{}
+
+	U1PrivKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	U1PubKey := U1PrivKey.PublicKey
+
+	U2PrivKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	U2PubKey := U2PrivKey.PublicKey
+
+	strKey := SendPublicKey(&U1PubKey)
+	U1Copy := ReceivePublicKey(strKey)
+
+	var block Block
+	var utxos UTXOSet
+
+	var utxo1 UTXO
+
+	utxo1.Owner = U1PubKey
+	utxo1.Amount = 10
+
+	var utxo2 UTXO
+
+	utxo2.Owner = U2PubKey
+	utxo2.Amount = 10
+
+	utxos.Utxos = append(utxos.Utxos, utxo1)
+	utxos.Utxos = append(utxos.Utxos, utxo2)
+
+	block.UTXOs = utxos
+	block.Timestamp = time.Now()
+	block.MineBlock()
+
+	blockchain.AddBlock(block)
+
+	transac := InitTransaction(U1PubKey, U2PubKey, 10)
+	transac.Sign(U1PrivKey)
+
+	concat := transac.Concatenate()
+	hash := sha256.Sum256(concat)
+	if ecdsa.VerifyASN1(&U1Copy, hash[:], transac.Signature) {
+		fmt.Println("réussi")
+	} else {
+		fmt.Println("raté")
+	}
+
+	a := blockchain.GetLastBlock().UTXOs.FindByKey(U1Copy)
+	if a != nil {
+		fmt.Println("réussi")
+	} else {
+		fmt.Println("raté")
+	}
+
+	transSTR := SendTransaction(&transac)
+	fmt.Println(transSTR)
+	newTrans := ReceiveTransaction(transSTR)
+
+	if transac.Verify(&blockchain) {
+		fmt.Println("Transaction verified")
+	} else {
+		fmt.Println("Transaction not verified")
+	}
+
+	var transactions []Transaction
+
+	transactions = append(transactions, transac)
+	newblock := InitBlock(transactions, blockchain.GetLastBlock().Hash, blockchain.GetLastBlock().UTXOs)
+
+	newblock.MineBlock()
+
+	blockStr := SendBlock(&newblock)
+	newblockCopy := ReceiveBlock(blockStr)
+
+	fmt.Println(blockStr)
+	//fmt.Println(newblock.UTXOs.FindByKey(U2PubKey).Amount)
+	if newblockCopy.VerifyBlock(blockchain) {
+		fmt.Println("New block verified")
+	} else {
+		fmt.Println("New block not verified")
+	}
+
+	blockchain.AddBlock(newblock)
+
+}*/
