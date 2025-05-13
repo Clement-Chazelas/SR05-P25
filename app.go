@@ -44,7 +44,7 @@ func sendInitialisation() {
 			time.Sleep(time.Duration(1) * time.Second)
 		}
 
-		if len(adressOfSite) >= nbSite-1 && sitePubKey.X.Cmp(adressOfSite[0].X) == 1 {
+		if len(adressOfSite) >= nbSite-1 && sitePubKey.X.Cmp(adressOfSite[0].X) == 1 && sitePubKey.X.Cmp(adressOfSite[1].X) == 1 {
 			//j'ai reçu tt les clés + j'ai la clé la plus grande
 			l.Println(Nom, "Je suis l'initialisateur")
 			mutex.Lock()
