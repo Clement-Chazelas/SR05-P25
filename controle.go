@@ -22,8 +22,7 @@ var raz string = "\033[0;00m"
 var pid = os.Getpid()
 var stderr = log.New(os.Stderr, "", 0)
 
-var pNom = flag.String("n", "controle", "Nom")
-var Nom = *pNom + "-" + strconv.Itoa(pid)
+var Nom string
 
 var MyId = -1
 var NbSite = 3
@@ -100,9 +99,10 @@ func main() {
 	//Il faut donc trier les messages à la lecture que ce soit coté ctrleur ou app
 	//Pour ne pas traiter des messages dont on n'est pas le destinataire
 	var rcvmsg string
-
+	var pNom = flag.String("n", "controle", "Nom")
 	flag.Parse()
 
+	Nom = *pNom + "-" + strconv.Itoa(pid)
 	initialisation()
 
 	for {
