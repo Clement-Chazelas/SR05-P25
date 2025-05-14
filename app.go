@@ -19,7 +19,8 @@ import (
 var rouge string = "\033[1;31m"
 var orange string = "\033[1;33m"
 var vert string = "\033[1;32m"
-var magenta string = "\033[1;30m" // Bleu (Gras)
+var noir string = "\033[1;30m"
+var magenta string = "\033[1;35m" // Bleu (Gras)
 var cyan string = "\033[1;36m"    // Cyan (Gras)
 var blanc string = "\033[1;37m"   // Blanc/Gris clair (Gras)
 
@@ -89,7 +90,12 @@ func sendMain() {
 			// Verif si autorisation d'accès à la section critique
 			if allowSC {
 				mutex.Lock()
+
+				stderr.Println()
+				stderr.Println(vert, Nom, "J'entre dans la section critique", raz)
+
 				stdverb.Println(Nom, "Initialisation d'un nouveau bloc")
+				stderr.Printf(" %s%s Ajout des transactions : %sau bloc%s\n", cyan, Nom, printTransactionsId(pendingTransactions), raz)
 
 				newBlock := InitBlock(pendingTransactions, blockChain.GetLastBlock().Hash, blockChain.GetLastBlock().UTXOs)
 				newBlock.MineBlock()
@@ -99,20 +105,20 @@ func sendMain() {
 				allowSC = false
 				isSCAsked = false
 				fmt.Printf("FILE:finSC\n")
-				stderr.Println(magenta, Nom, "Fin de Section critique", raz)
+				stderr.Println(noir, Nom, "Fin de Section critique", raz)
 				stderr.Println()
 
 				mutex.Unlock()
 				pendingTransactions = []Transaction{}
 
-				time.Sleep(time.Duration(5) * time.Second)
+				time.Sleep(time.Duration(2) * time.Second)
 			} else if !isSCAsked {
 				// On ne demande qu'une seule fois l'accès à la section critique
 				fmt.Printf("FILE:demandeSC\n")
 				isSCAsked = true
 				stderr.Println(orange, Nom, "Demande Section critique", raz)
-
 				time.Sleep(time.Duration(2) * time.Second)
+
 			} else {
 				// J'attends mon autorisation d'accès à la section critique, je continue d'envoyer des transac en attendant
 				mutex.Lock()
@@ -126,8 +132,8 @@ func sendMain() {
 
 				mutex.Unlock()
 
-				stderr.Printf("%s %s Nouvelle transaction de %d coins envoyée à %s %s", blanc, Nom, amount, nameOfSites[index], raz)
-				time.Sleep(time.Duration(5) * time.Second)
+				stderr.Printf("%s %s Nouvelle transaction de %d coins envoyée à %s ; ID=%d %s", blanc, Nom, amount, nameOfSites[index], newTransaction.Id, raz)
+				time.Sleep(time.Duration(amount) * time.Second)
 			}
 
 		} else {
@@ -135,11 +141,15 @@ func sendMain() {
 
 			if allowSC {
 				//La section critique avait été demandé mais mes transactions ont déjà été minés par un autre nœud
+				stderr.Println()
+				stderr.Println(vert, Nom, "J'entre dans la section critique", raz)
+
 				allowSC = false
 				isSCAsked = false
 				fmt.Printf("FILE:finSC\n")
+
 				stderr.Println(rouge, Nom, "Je n'ai pas de transaction en attente", raz)
-				stderr.Println(magenta, Nom, "Fin de Section critique", raz)
+				stderr.Println(noir, Nom, "Fin de Section critique", raz)
 				stderr.Println()
 			}
 
@@ -154,8 +164,8 @@ func sendMain() {
 
 			mutex.Unlock()
 
-			stderr.Printf("%s %s Nouvelle transaction de %d coins envoyée à %s %s", blanc, Nom, amount, nameOfSites[index], raz)
-			time.Sleep(time.Duration(10) * time.Second)
+			stderr.Printf("%s %s Nouvelle transaction de %d coins envoyée à %s ; ID=%d %s", blanc, Nom, amount, nameOfSites[index], newTransaction.Id, raz)
+			time.Sleep(time.Duration(amount) * time.Second)
 		}
 	}
 
@@ -216,8 +226,7 @@ func receive() {
 				}
 			}
 		} else if rcvmsg == "debutSC" {
-			stderr.Println()
-			stderr.Println(vert, Nom, "J'entre dans la section critique", raz)
+			// Le controleur m'autorise à accèder à la section critique
 			allowSC = true
 		}
 		mutex.Unlock()
