@@ -5,6 +5,7 @@ import (
 	"crypto/elliptic"
 	"encoding/base64"
 	"math/big"
+	"strconv"
 	"time"
 )
 
@@ -54,6 +55,7 @@ func ToECDSAPublicKey(spk SerializablePublicKey) *ecdsa.PublicKey {
 }
 
 type SerializableTransaction struct {
+	Id        int `json:"Id"`
 	Sender    SerializablePublicKey
 	Receiver  SerializablePublicKey
 	Amount    int       `json:"Amount"`
@@ -62,11 +64,22 @@ type SerializableTransaction struct {
 }
 
 func (transaction *Transaction) FromTransaction() SerializableTransaction {
-	return SerializableTransaction{FromECDSAPublicKey(&transaction.Sender), FromECDSAPublicKey(&transaction.Receiver), transaction.Amount, transaction.Timestamp, transaction.Signature}
+	return SerializableTransaction{transaction.Id, FromECDSAPublicKey(&transaction.Sender), FromECDSAPublicKey(&transaction.Receiver), transaction.Amount, transaction.Timestamp, transaction.Signature}
 }
 
 func (transaction *SerializableTransaction) ToTransaction() Transaction {
-	return Transaction{*ToECDSAPublicKey(transaction.Sender), *ToECDSAPublicKey(transaction.Receiver), transaction.Amount, transaction.Timestamp, transaction.Signature}
+	return Transaction{transaction.Id, *ToECDSAPublicKey(transaction.Sender), *ToECDSAPublicKey(transaction.Receiver), transaction.Amount, transaction.Timestamp, transaction.Signature}
+}
+
+func printTransactionsId(transactions []Transaction) string {
+	var strId string
+	for i, tx := range transactions {
+		strId += strconv.Itoa(tx.Id) + " "
+		if i != len(transactions)-1 {
+			strId += "; "
+		}
+	}
+	return strId
 }
 
 type SerializableUTXO struct {
