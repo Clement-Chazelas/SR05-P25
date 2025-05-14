@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/cnf/structhash"
+	mrand "math/rand"
 	"time"
 )
 
@@ -99,7 +100,7 @@ func (block *Block) MineBlock() {
 			block.Nonce = i
 			block.Hash = hash
 
-			stdverb.Printf("%s temps de minage %s\n", Nom, time.Since(heureDebut))
+			stderr.Printf(" %s%s Bloc miné en : %s %s\n", magenta, Nom, time.Since(heureDebut), raz)
 			break
 		}
 
@@ -154,6 +155,7 @@ func (block *Block) updateTransactionsFromBlock(transactions []Transaction) []Tr
 }
 
 type Transaction struct {
+	Id        int
 	Sender    ecdsa.PublicKey
 	Receiver  ecdsa.PublicKey
 	Amount    int
@@ -176,7 +178,7 @@ type Transaction struct {
 
 func InitTransaction(sender ecdsa.PublicKey, receiver ecdsa.PublicKey, amount int) Transaction {
 	var transaction Transaction
-
+	transaction.Id = mrand.Intn(9999) + 1
 	transaction.Sender = sender
 	transaction.Receiver = receiver
 	transaction.Amount = amount
