@@ -34,6 +34,7 @@ const (
 	MsgType       string = "typ"
 	MsgData       string = "dat"
 	MsgEstampille string = "est"
+	MsgColor 			string = "clr"
 	app           string = "app"
 	file          string = "file"
 	snapshot      string = "snapshot"
@@ -123,6 +124,8 @@ func main() {
 			switch rcvCat {
 			case app:
 				// Maj horloge vectorielle
+				ReceiveAppMessage(rcvmsg)
+
 				rcvData := findval(rcvmsg, MsgData)
 				//Envoi de la donnée reçue à l'application
 				fmt.Printf("CONT:%s\n", rcvData)
@@ -139,7 +142,16 @@ func main() {
 				break
 
 			case snapshot:
-				//Appel des fonctions spécifiques
+				msgType := findval(rcvmsg, MsgType)
+				switch msgType {
+				case string(prepost):
+					ReceivePrepostMessage(rcvmsg)
+				case string(state):
+					ReceiveStateMessage(rcvmsg)
+				}
+
+				fmt.Println(rcvmsg)
+
 				break
 			}
 		} else {
@@ -157,7 +169,11 @@ func main() {
 				continue
 			} else {
 				//Envoie du message de l'app aux autres controleurs
-				newMessage := MsgFormat(MsgSender, Nom) + MsgFormat(MsgCategory, app) + MsgFormat(MsgData, rcvmsg)
+				newMessage := MsgFormat(MsgSender, Nom) +
+					MsgFormat(MsgCategory, app) +
+					MsgFormat(MsgData, rcvmsg) +
+					MsgFormat(MsgColor, color) +
+					MsgFormat(MsgHorloge, vectorClock)
 				//Il faudra ajouter HVectorielle
 				fmt.Println(newMessage)
 			}
