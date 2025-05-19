@@ -1,4 +1,9 @@
+// Gère le protocole de snapshot distribué avec horloges vectorielles
+// Permet de figer l’état de la blockchain et des messages prépost entre les sites
+// Utilisé uniquement côté contrôleur
+
 package main
+
 
 import (
 	"encoding/json"
@@ -9,39 +14,40 @@ import (
 	"time"
 )
 
+// Déclare les types de message pour le protocole de snapshot
 type messageSnapType string
 
 const (
-	prepost messageSnapType = "pre"
-	state   messageSnapType = "sta"
+	prepost messageSnapType = "pre" // Message "pre" contenant un message prépost
+	state   messageSnapType = "sta" // Message "state" contenant un état local
 )
 
-// HORLOGE VECTORIELLE
+// HORLOGE VECTORIELLE - partagée entre tous les sites
 var vectorClock []int = make([]int, NbSite)
 
-// VARIABLES
-var localSnapshot Snapshot
-var myColor string = "white"
-var initiator bool = false
+// VARIABLES de SNAPSHOT
+var localSnapshot Snapshot   // Snapshot locale en cours
+var myColor string = "white" // État du site : "white" = pas encore participé, "red" = snapshot déclenché
+var initiator bool = false 	 // Indique si le site a initié le snapshot
 
-var localBlockchain SerializableBlockchain
+var localBlockchain SerializableBlockchain  //Blockchain locale sérialisée
 
-// SNAPSHOT
+// Snapshot structure les données capturées localement lors du snapshot
 type Snapshot struct {
-	LocalState    []SerializableBlockchain `json:"Blockchains"` // A voir comment on récupère la blockchain
-	VectorClock   []int                    `json:"VectorClock"` // Pour savoir quand a été prise la snapshot
-	Timestamp     time.Time                `json:"timestamp"`
+	LocalState    []SerializableBlockchain `json:"Blockchains"`   // Blockchain locale de chaque site
+	VectorClock   []int                    `json:"VectorClock"`   // Horloge vectorielle au moment du snapshot
+	Timestamp     time.Time                `json:"timestamp"`	  // Date et heure de capture
 	ChannelStates [][]string               `json:"ChannelStates"` // Messages prepost
-	//PendingTransaction [][]Transaction
 }
 
-// Utilitaires
+// copyVectorClock copie une horloge vectorielle dans un nouveau tableau
 func copyVectorClock(clock []int) []int {
 	copyClock := make([]int, len(clock))
 	copy(copyClock, clock)
 	return copyClock
 }
 
+// mergeVectorClocks fusionne deux horloges vectorielles composante par composante (max)
 func mergeVectorClocks(vc1, vc2 []int) []int {
 	merged := make([]int, len(vc1))
 	for i := range vc1 {
@@ -54,13 +60,13 @@ func mergeVectorClocks(vc1, vc2 []int) []int {
 	return merged
 }
 
-// Fonction de début, initialisation de la snapshot par un site
+// InitSnapshot initialise une snapshot locale et marque le site comme initiateur
 func InitSnapshot() {
 	display_d("Snapshot", "initialisation de la snapshot")
 	myColor = "red"
 	initiator = true
 
-	// Sauvegarde locale
+	// Capture l’état local : blockchain + horloge
 	localSnapshot = Snapshot{
 		LocalState:    make([]SerializableBlockchain, NbSite),
 		VectorClock:   copyVectorClock(vectorClock),
@@ -71,7 +77,7 @@ func InitSnapshot() {
 
 }
 
-// Fonction d'envoi des messages
+// sendSnapshotMessage envoie un message de snapshot formaté (type + contenu)
 func sendSnapshotMessage(msgType messageSnapType, data string) {
 
 	formattedMsg := MsgFormat(MsgSender, Nom) +
@@ -82,12 +88,14 @@ func sendSnapshotMessage(msgType messageSnapType, data string) {
 	fmt.Println(formattedMsg)
 }
 
-// Fonction pour la réception d'un message applicatif
+// ReceiveAppMessage traite un message applicatif reçu et déclenche un snapshot si besoin
 func ReceiveAppMessage(msg string) {
 	sdrClock := StrToClock(findval(msg, MsgHorloge))
 	vectorClock = mergeVectorClocks(vectorClock, sdrClock)
 
 	c := findval(msg, MsgColor)
+
+	// Déclenche le snapshot si message rouge reçu pour la première fois
 	if c == "red" && myColor == "white" {
 		myColor = "red"
 
@@ -98,16 +106,18 @@ func ReceiveAppMessage(msg string) {
 			Timestamp:     time.Now(),
 		}
 
-		//Conversion de la snapshot locale en string et envoie à l'initiateur
+		// Sérialise la snapshot et envoie l’état local au site initiateur
 		strSnap, _ := json.Marshal(localSnapshot)
 		sendSnapshotMessage(state, string(strSnap))
 	}
 
+	// Envoie les messages reçus comme "prepost" s’il est déjà rouge
 	if c == "white" && myColor == "red" {
 		sendSnapshotMessage(prepost, msg)
 	}
 }
 
+// ReceivePrepostMessage ajoute un message prépost au canal du site concerné
 func ReceivePrepostMessage(msg string) {
 
 	rcvData := findval(msg, MsgData)
@@ -119,6 +129,7 @@ func ReceivePrepostMessage(msg string) {
 
 }
 
+// ReceiveStateMessage ajoute un état reçu (EGi) à la snapshot locale (depuis un autre site)
 func ReceiveStateMessage(msg string) {
 	var rcvSnap Snapshot
 
@@ -128,14 +139,15 @@ func ReceiveStateMessage(msg string) {
 
 	sender := findval(msg, MsgSender)
 	sdrId := sort.SearchStrings(Sites, sender)
-	// J'ajoute la blockchain reçue à ma snapshot locale
+
+	// Stocke la blockchain du site distant
 	localSnapshot.LocalState[sdrId] = rcvSnap.LocalState[0]
-	//Peut etre Transaction
 
 	// Demander au prof quoi faire avec l'horloge
 
 }
 
+// ClockToStr convertit une horloge vectorielle en chaîne (ex: "1,0,2")
 func ClockToStr(clock []int) string {
 	strs := make([]string, len(clock))
 	for i, v := range clock {
@@ -144,6 +156,7 @@ func ClockToStr(clock []int) string {
 	return strings.Join(strs, ",")
 }
 
+// StrToClock convertit une chaîne d’horloge vectorielle en tableau d’int
 func StrToClock(clockStr string) []int {
 	parts := strings.Split(clockStr, ",")
 	clock := make([]int, len(parts))
@@ -152,37 +165,3 @@ func StrToClock(clockStr string) []int {
 	}
 	return clock
 }
-
-/*
-
-Fonction strToCLock et ClockToStr
-Remplacer updateVectorClock par mergeVectorClock
-
-
-
-Importer le fichier blockchainStruct et serializeStruct dans ce projet et ajouter blockchainToStr et strToBlockchain
-Modifier la structure Snapshot pour qu'elle contienne une blockchain
-Faire les fonctions SnapshotToStr et StrToSnapshot en utilisant Json
-
-
-
-faire un schéma de l'échange des messages entre les sites
-
-
-Faire le script démarrer snapshot
-
-Coté application, attendre la fin des go routines
-
-Faire le print de la snapshot dans un fichier
-
-Si le temps, gérer l'arret de la blockchain
-
-
-Faire que l'app envoie sa blockchain au controleur
-
-Canva : Présentation blockchain générale
-Présentation intégration dans notre application avec file d'attente
-Présentation Snapshot
-
-
-*/
