@@ -1,3 +1,7 @@
+// Joue le rôle de médiateur entre l'application (app) et les autres sites du réseau réparti
+// Gère la diffusion des messages, les filtres de réception, l’initialisation de l’anneau,
+// ainsi que le déclenchement et la gestion du protocole de snapshot distribué.
+
 package main
 
 import (
@@ -10,23 +14,25 @@ import (
 	"strings"
 )
 
+// Caractères utilisés pour formater les messages entre les sites
 var fieldsep = "$"
 var keyvalsep = "~"
 
-// Codes pour le terminal
+// Couleurs utilisées pour l'affichage dans le terminal
 var rouge string = "\033[1;31m"
 var orange string = "\033[1;33m"
 var vert string = "\033[1;32m"
 var raz string = "\033[0;00m"
 
+// Initialisation des variables globales
 var pid = os.Getpid()
 var stderr = log.New(os.Stderr, "", 0)
 
-var Nom string
+var Nom string  // Nom complet du site (ex: C1-xxxxx)
+var MyId = -1   // ID du site dans le tableau trié
+var NbSite = 3  // Nombre total de sites dans l'anneau
 
-var MyId = -1
-var NbSite = 3
-
+// Constantes utilisées dans les messages
 const (
 	MsgSender     string = "sdr"
 	MsgCategory   string = "cat"
@@ -40,12 +46,14 @@ const (
 	snapshot      string = "snapshot"
 )
 
-var Sites []string
+var Sites []string  // Liste triée des noms des contrôleurs
 
+// MsgFormat construit une chaîne de message formattée avec une clé et une valeur
 func MsgFormat(key string, val string) string {
 	return fieldsep + keyvalsep + key + keyvalsep + val
 }
 
+// findval extrait la valeur correspondant à une clé dans un message formatté
 func findval(msg string, key string) string {
 
 	if len(msg) < 4 {
@@ -65,8 +73,8 @@ func findval(msg string, key string) string {
 
 }
 
+// initialisation établit le tableau des sites et attribue un ID unique trié
 func initialisation() {
-	// Initialisation -> remplissage du tableau Sites avec les noms des autres controleurs
 	var rcvmsg string
 
 	Sites = append(Sites, Nom)
@@ -95,10 +103,8 @@ func initialisation() {
 	return
 }
 
+// main boucle indéfiniment pour lire, traiter et relayer les messages entrants
 func main() {
-	//Il ne faut pas oublier que le canal ctrleur -> app et ctlreur -> ctrl est le même
-	//Il faut donc trier les messages à la lecture que ce soit coté ctrleur ou app
-	//Pour ne pas traiter des messages dont on n'est pas le destinataire
 	var rcvmsg string
 	var pNom = flag.String("n", "controle", "Nom")
 	flag.Parse()
@@ -107,15 +113,11 @@ func main() {
 	initialisation()
 
 	for {
-
 		fmt.Scanln(&rcvmsg)
-
-		//display_d("main", "réception de "+rcvmsg)
-
 		rcvSdr := findval(rcvmsg, MsgSender)
+
 		if rcvSdr == Nom {
-			//Je ne traite pas un message que j'ai envoyé me revenant (anneau unidirectionnel)
-			continue
+			continue //Je ne traite pas un message que j'ai envoyé me revenant (anneau unidirectionnel)
 		}
 
 		if rcvmsg == "startSnapshot" {
@@ -125,17 +127,17 @@ func main() {
 		}
 
 		rcvCat := findval(rcvmsg, MsgCategory)
+
 		// Si champ Catégorie est présent -> le msg vient d'un autre controleur
 		if rcvCat != "" {
+			// message inter-contrôleur
 			switch rcvCat {
 			case app:
 				// Maj horloge vectorielle
 				ReceiveAppMessage(rcvmsg)
-
 				rcvData := findval(rcvmsg, MsgData)
 				//Envoi de la donnée reçue à l'application
 				fmt.Printf("CONT:%s\n", rcvData)
-
 				// Renvoyer le message reçu (car anneau unidirectionnel)
 				fmt.Println(rcvmsg)
 				break
@@ -158,14 +160,13 @@ func main() {
 						stderr.Println(localSnapshot)
 					}
 				} else {
-					// Je ne suis pas l'initiateur, je relai le message
+					// Je ne suis pas l'initiateur, je relai la snapshot
 					fmt.Println(rcvmsg)
 				}
 				break
 			}
 		} else {
 			//Le msg vient de l'application
-
 			if rcvmsg[:5] == "FILE:" {
 				// Ce message concerne la section critique
 				ReceiveSC(rcvmsg[5:])
@@ -178,8 +179,7 @@ func main() {
 				continue
 			} else {
 				//Envoie du message de l'app aux autres controleurs
-				vectorClock[MyId]++
-
+				vectorClock[MyId]++ //Mise à jour de l'horloge vectorielle
 				newMessage := MsgFormat(MsgSender, Nom) +
 					MsgFormat(MsgCategory, app) +
 					MsgFormat(MsgData, rcvmsg) +
@@ -194,15 +194,18 @@ func main() {
 	}
 }
 
+// display_d affiche un message de debug en vert
 func display_d(where string, what string) {
 	stderr.Printf("%s + [%s] %-8.8s : %s\n%s", vert, Nom, where, what, raz)
 }
 
+// display_w affiche un message d'avertissement en orange
 func display_w(where string, what string) {
 
 	stderr.Printf("%s * [%s] %-8.8s : %s\n%s", orange, Nom, where, what, raz)
 }
 
+// display_e affiche une erreur en rouge
 func display_e(where string, what string) {
 	stderr.Printf("%s ! [%s] %-8.8s : %s\n%s", rouge, Nom, where, what, raz)
 }
