@@ -1,8 +1,9 @@
-// Implémente une file d'attente répartie avec estampilles logiques
-// Gère la coordination entre sites pour l’accès exclusif à la section critique
-// Chaque site peut demander, libérer et accorder un droit d’accès à la SC en respectant l’ordre logique
-
 package main
+
+/*
+Ce fichier implémente l'algorithme de la file d'attente répartie avec estampilles.
+Il gère la coordination entre les applications pour l’accès exclusif à la section critique (écriture sur la blockchain)
+*/
 
 import (
 	"fmt"
@@ -10,97 +11,135 @@ import (
 	"strconv"
 )
 
-// Déclare les types de message pour la file d’attente
 type messageFileType string
 
+// Constantes correspondant aux types de message pour la file d’attente
 const (
-	request messageFileType = "req" // Demande d’entrée en section critique
-	release messageFileType = "rel" // Libération de la section critique
-	ack     messageFileType = "ack" // Accusé de réception
+	request messageFileType = "req"
+	release messageFileType = "rel"
+	ack     messageFileType = "ack"
 )
 
-// messageFile stocke un message avec son type et une date
+// messageFile correspond à un message utilisé par l'algo de la file d'attente répartie
+// Il possède un type et une date (estampille)
 type messageFile struct {
-	Type messageFileType
-	Date int
+	Type messageFileType // type du message
+	Date int             // estampille
 }
 
 // Chaque site est identifié par son ID (index)
 // La file d'attente est un tableau de taille nbSite
-// La file d’attente (fileAtt) contient le dernier message reçu (indice i) de chaque site (i)
-// un message est un type et une date
+// La file d’attente (fileAtt) contient le dernier message reçu (à indice i) de chaque site (i)
 var fileAtt = make([]messageFile, NbSite)
 
-var estamp int = 0         // Estampille logique locale
-var estampLastReq int = 0  // Estampille de la dernière requête traitée
+// Estampille du controleur
+var estamp int = 0
 
-// receiveDemandeSC traite une demande locale d’entrée en section critique
+// Estampille de ma dernière requête autorisée
+// Utilisée pour éviter d'accorder deux fois la même requête
+var estampLastReq int = 0
+
+// receiveDemandeSC traite une demande de l'application d’entrée en section critique
 func receiveDemandeSC() {
 	estamp++
+
+	// Création du message de type requête et ajout dans ma file d'attente
 	newMessage := messageFile{Type: request, Date: estamp}
 	fileAtt[MyId] = newMessage
+
+	// Envoi de la requête aux autres controleurs
 	sendFileMessage(request)
 }
 
-// receiveFinSC traite la sortie de la section critique locale
+// receiveFinSC traite la sortie de la section critique de l'application
 func receiveFinSC() {
 	estamp++
+
+	// Création du message de type release et ajout dans ma file d'attente
 	newMessage := messageFile{Type: release, Date: estamp}
 	fileAtt[MyId] = newMessage
+
+	// Envoi de la libération aux autres controleurs
 	sendFileMessage(release)
 }
 
-// receiveRequest met à jour l’estampille locale et enregistre une demande distante
-// Envoie un ack et vérifie si le site courant peut entrer en SC
+// receiveRequest traite une requête en provenance d'un autre controleur.
+// Elle met à jour l’estampille locale et sa file d'attente
+// Envoie un ack et vérifie si le controleur peut entrer en SC
 func receiveRequest(j, h int) {
+
+	// Maj de l'estampille et ajout de la requête dans la file d'attente
 	estamp = maxInt(estamp, h) + 1
 	fileAtt[j] = messageFile{Type: request, Date: h}
+
+	// Envoi de l'ack
 	sendFileMessage(ack)
 
+	// Vérifie si j'ai une requête et que son estampille est la plus petite
 	if fileAtt[MyId].Type == request && isOldestRequest() {
-		//Envoyer DébutSC à l'App
+		//Envoi DébutSC à l'Application
 		fmt.Printf("CONT:debutSC\n")
 	}
 
 }
 
-// receiveRelease enregistre la libération de SC par un autre site et vérifie si le site courant est éligible
+// receiveRelease traite une libération en provenance d'un autre controleur.
+// Elle enregistre la libération de la SC par un autre site
+// et vérifie si le controleur peut entrer en SC
 func receiveRelease(j, h int) {
+
+	// Maj de l'estampille et ajout de la libération dans la file d'attente
 	estamp = maxInt(estamp, h) + 1
 	fileAtt[j] = messageFile{Type: release, Date: h}
 
+	// Vérifie si j'ai une requête et que son estampille est la plus petite
 	if fileAtt[MyId].Type == request && isOldestRequest() {
-		//Envoyer DébutSC à l'App
+		//Envoi DébutSC à l'Application
 		fmt.Printf("CONT:debutSC\n")
 	}
 }
 
-// receiveAck traite la réception d’un accusé (ack) et vérifie l’éligibilité à la SC
+// receiveAck traite un ack en provenance d'un autre controleur.
+// Elle enregistre l'ack si nécessaire et vérifie si le controleur peut entrer en SC
 func receiveAck(j, h int) {
+
+	// Maj de l'estampille
 	estamp = maxInt(estamp, h) + 1
+
+	// Un ack ne peut pas remplacer un message de type requête
 	if fileAtt[j].Type != request {
 		fileAtt[j] = messageFile{Type: ack, Date: h}
 	}
+
+	// Vérifie si j'ai une requête et que son estampille est la plus petite
 	if fileAtt[MyId].Type == request && isOldestRequest() {
-		//Envoyer DébutSC à l'App
+		//Envoi DébutSC à l'Application
 		fmt.Printf("CONT:debutSC\n")
 	}
 
 }
 
-// sendFileMessage envoie un message de type req/rel/ack aux autres sites via le contrôleur
+// sendFileMessage envoie un message de type req/rel/ack aux autres controleur
 func sendFileMessage(msgType messageFileType) {
+	// Formatage du message incluant l'estampille et le type
 	newMessage := MsgFormat(MsgSender, Nom) + MsgFormat(MsgCategory, file) + MsgFormat(MsgEstampille, strconv.Itoa(estamp)) +
 		MsgFormat(MsgType, string(msgType))
+
+	// Envoi du message
 	fmt.Println(newMessage)
 }
 
-// ReceiveFileMessage redirige un message reçu selon son type (req, rel, ack)
+// ReceiveFileMessage est appelée à la réception d'un message de catégorie file.
+// Elle traite le message reçu selon son type (req, rel, ack).
 func ReceiveFileMessage(msg string) {
+
 	rcvType := messageFileType(findval(msg, MsgType))
+	sdrEstamp, _ := strconv.Atoi(findval(msg, MsgEstampille))
+
+	// Récupération du nom de l'expéditeur pour en déduire son ID (indice dans liste Noms)
 	sender := findval(msg, MsgSender)
 	sdrId := sort.SearchStrings(Sites, sender)
-	sdrEstamp, _ := strconv.Atoi(findval(msg, MsgEstampille))
+
 	switch rcvType {
 	case request:
 		receiveRequest(sdrId, sdrEstamp)
@@ -115,7 +154,7 @@ func ReceiveFileMessage(msg string) {
 
 }
 
-// ReceiveSC traite une commande locale reçue de l’application (demandeSC ou finSC)
+// ReceiveSC traite une demande reçue de l'application pour entrer ou sortir de la section critique
 func ReceiveSC(msg string) {
 	switch msg {
 	case "demandeSC":
@@ -135,7 +174,7 @@ func maxInt(a, b int) int {
 	return b
 }
 
-// infCouple compare deux couples (estampille, id) pour définir une priorité
+// infCouple compare deux couples d'entier pour définir le plus petit
 func infCouple(a, b [2]int) bool {
 	if a[0] < b[0] {
 		return true
@@ -146,26 +185,30 @@ func infCouple(a, b [2]int) bool {
 	return false
 }
 
-// isOldestRequest détermine si le site courant a la plus ancienne requête en attente
+// isOldestRequest détermine si le site courant à la plus ancienne requête en attente
 func isOldestRequest() bool {
-	//tderr.Println(Nom, MyId, fileAtt)
 
+	// L'estampille de ma requête correspond à la dernière requête acceptée
 	if fileAtt[MyId].Date == estampLastReq {
 		// Requête déjà traitée
 		return false
-	} // Vérifie si la requête courante est déjà traitée
+	}
 
+	// Parcours de la file d'attente
 	for id, msg := range fileAtt {
+
 		if id == MyId {
 			// Je ne traite pas ma propre requête
 			continue
 		}
 
-		// Vérif que le couple (date, id) est le plus petit de tous et qu'on a bien reçu les ACK (ou autre) de tt le monde (date !=0)
+		// Vérifie que le couple (date, id) est le plus petit de tous et que la file d'attente n'a pas de case vide
 		if !infCouple([2]int{fileAtt[MyId].Date, MyId}, [2]int{msg.Date, id}) || msg.Date == 0 {
 			return false
 		}
 	}
+
+	// La requête devient la dernière acceptée
 	estampLastReq = fileAtt[MyId].Date
 	return true
 }
