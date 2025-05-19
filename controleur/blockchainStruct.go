@@ -1,5 +1,11 @@
 package main
 
+/*
+Ce fichier est une version allégée des structures originales présentes dans le dossier application.
+Il n'est utilisé que pour importer les structures et fonctions de l'application nécessaires au controleur.
+Toute la documentation des structures et fonctions est disponible dans le fichier du projet application.
+*/
+
 import (
 	"crypto/ecdsa"
 	"encoding/json"
@@ -15,7 +21,7 @@ type Block struct {
 	Transactions []Transaction
 	UTXOs        UTXOSet
 	Timestamp    time.Time
-	Nonce        uint32 //version 1 / version 2
+	Nonce        uint32
 }
 
 type Transaction struct {
