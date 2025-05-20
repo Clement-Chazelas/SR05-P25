@@ -44,6 +44,36 @@ Tous les échanges réseau passent par le contrôleur associé, qui relaie les m
 
 ## Partie contrôleur
 
+Le contrôleur agit comme un médiateur et coordinateur pour l’application.
+Il assure la synchronisation, la diffusion fiable des messages, la gestion de l’exclusion mutuelle (minage) et la capture d’instantanés (snapshots).
+
+Principales responsabilités :
+
+**Initialisation et identification**
+- Échange des noms entre contrôleurs pour constituer la liste globale des sites.
+- Attribution d’un identifiant unique à chaque contrôleur (index dans la liste triée).
+- Transmission du signal de départ à l’application une fois l’initialisation terminée.
+
+**Gestion des messages**
+- Lecture continue des messages entrants (depuis l’application ou d’autres contrôleurs).
+- Filtrage des messages pour éviter les doublons (anneau unidirectionnel).
+- Relais des messages applicatifs, de file d’attente et de snapshot selon leur catégorie.
+
+**Algorithme de file d’attente répartie**
+- Réception des demandes d’accès à la section critique de l’application.
+- Diffusion des requêtes, accusés de réception (ack) et libérations (release) aux autres contrôleurs.
+- Maintien d’une file d’attente locale des requêtes, triée par estampille et identifiant.
+- Autorisation de l’accès à la SC uniquement si la requête locale est la plus ancienne.
+- Transmission du signal d’entrée/sortie de SC à l’application.
+
+**Gestion des snapshots distribués**
+- Déclenchement et gestion de la capture d’instantanés de l’état global.
+- Utilisation d’horloges vectorielles pour dater les snapshots.
+- Agrégation des états locaux et des messages prépost pour obtenir une image cohérente du système.
+
+**Sérialisation et conversion**
+- Conversion des structures complexes (transactions, blocs, blockchain) en chaînes JSON pour la transmission réseau.
+
 ### Algorithme d'exécution répartie
 
 Pour garantir la cohérence et l’exclusivité lors du minage, chaque application doit demander l’accès à la section critique (SC) via son contrôleur.
