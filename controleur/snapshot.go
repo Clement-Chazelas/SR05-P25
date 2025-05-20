@@ -164,7 +164,7 @@ func ReceiveStateMessage(msg string) {
 
 		for i := 0; i < NbSite; i++ {
 			file.WriteString("Blockchain site " + strconv.Itoa(i) + " : " + SendBlockchain(localSnapshot.LocalState[i].ToBlockchain()) + "\n\n")
-			file.WriteString("Messages prépost pour le site " + strconv.Itoa(i) + " : " + strings.Join(localSnapshot.ChannelStates[i], " | ") + "\n\n")
+			file.WriteString("Messages prépost pour le site " + strconv.Itoa(i) + " : " + strings.Join(localSnapshot.ChannelStates[i], "\n") + "\n\n")
 			file.WriteString("Date sauvegarde pour le site " + strconv.Itoa(i) + " : " + ClockToStr(localSnapshot.VectorClock[i]) + "\n\n")
 		}
 
@@ -213,16 +213,3 @@ func StrToClock(clockStr string) []int {
 	}
 	return clock
 }
-
-/*
-
-Si le temps, gérer l'arret de la blockchain
-
-Canva : Présentation blockchain générale
-Présentation intégration dans notre application avec file d'attente
-Présentation Snapshot
-
-faire un schéma de l'échange des messages entre les sites
-
-
-*/
