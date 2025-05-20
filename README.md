@@ -17,82 +17,82 @@ Elle fonctionne en collaboration étroite avec son contrôleur associé pour gar
 Principales responsabilités :
 
 **Initialisation**
-- Génération de la paire de clés publique/privée (ECDSA).
-- Échange des clés publiques et des noms avec les autres sites via le contrôleur.
-- Création du bloc initial (genesis) par le site ayant la plus grande clé publique, puis diffusion à tous les autres.
+- Génération de la paire de clés publique/privée
+- Échange des clés publiques et des noms avec les autres sites via le contrôleur
+- Création du bloc initial par le site ayant la plus grande clé publique, puis diffusion à tous les autres
 
 **Gestion des transactions**
-- Création de transactions (expéditeur, destinataire, montant, timestamp, signature).
-- Signature des transactions avec la clé privée locale.
-- Envoi des transactions aux autres sites via le contrôleur.
-- Réception, vérification (signature, solde suffisant) et ajout des transactions reçues dans le pool d’attente.
+- Création de transactions (expéditeur, destinataire, montant, timestamp, signature)
+- Signature des transactions avec la clé privée locale
+- Envoi des transactions aux autres sites via le contrôleur
+- Réception, vérification (signature, solde suffisant) et ajout des transactions reçues dans le pool d’attente
 
 **Minage et section critique**
-- Demande d’accès à la section critique (SC) auprès du contrôleur pour miner un bloc.
-- Regroupement des transactions en attente dans un nouveau bloc.
-- Calcul du hash du bloc (preuve de travail : hash commençant par 00000).
-- Ajout du bloc miné à la blockchain locale.
-- Envoi du bloc miné aux autres sites via le contrôleur.
+- Demande d’accès à la section critique (SC) auprès du contrôleur pour miner un bloc
+- Regroupement des transactions en attente dans un nouveau bloc
+- Calcul du hash du bloc (preuve de travail : hash commençant par 00000)
+- Ajout du bloc miné à la blockchain locale
+- Envoi du bloc miné aux autres sites via le contrôleur
 
 **Propagation et validation**
-- Réception des blocs minés par les autres sites.
-- Vérification de l’intégrité du bloc (hash, previousHash, validité des transactions, cohérence des UTXO).
-- Mise à jour de la blockchain locale et du pool de transactions.
+- Réception des blocs minés par les autres sites
+- Vérification de l’intégrité du bloc (hash, previousHash, validité des transactions, cohérence des UTXO)
+- Mise à jour de la blockchain locale et du pool de transactions
 
 **Communication**
-Tous les échanges réseau passent par le contrôleur associé, qui relaie les messages aux autres sites.
+Tous les échanges réseau passent par le contrôleur associé, qui relaie les messages aux autres sites
 
 ## Partie contrôleur
 
 Le contrôleur agit comme un médiateur et coordinateur pour l’application.
-Il assure la synchronisation, la diffusion fiable des messages, la gestion de l’exclusion mutuelle (minage) et la capture d’instantanés (snapshots).
+Il assure la synchronisation, la diffusion fiable des messages, la gestion de l’exclusion mutuelle (minage) et la capture d’instantanés (snapshots)
 
 Principales responsabilités :
 
 **Initialisation et identification**
-- Échange des noms entre contrôleurs pour constituer la liste globale des sites.
-- Attribution d’un identifiant unique à chaque contrôleur (index dans la liste triée).
-- Transmission du signal de départ à l’application une fois l’initialisation terminée.
+- Échange des noms entre contrôleurs pour constituer la liste globale des sites
+- Attribution d’un identifiant unique à chaque contrôleur (index dans la liste triée)
+- Transmission du signal de départ à l’application une fois l’initialisation terminée
 
 **Gestion des messages**
-- Lecture continue des messages entrants (depuis l’application ou d’autres contrôleurs).
-- Filtrage des messages pour éviter les doublons (anneau unidirectionnel).
-- Relais des messages applicatifs, de file d’attente et de snapshot selon leur catégorie.
+- Lecture continue des messages entrants (depuis l’application ou d’autres contrôleurs
+- Filtrage des messages pour éviter les doublons (car anneau unidirectionnel entre les controleurs)
+- Relais des messages applicatifs, de file d’attente et de snapshot selon leur catégorie
 
 **Algorithme de file d’attente répartie**
-- Réception des demandes d’accès à la section critique de l’application.
-- Diffusion des requêtes, accusés de réception (ack) et libérations (release) aux autres contrôleurs.
-- Maintien d’une file d’attente locale des requêtes, triée par estampille et identifiant.
-- Autorisation de l’accès à la SC uniquement si la requête locale est la plus ancienne.
-- Transmission du signal d’entrée/sortie de SC à l’application.
+- Réception des demandes d’accès à la section critique de l’application
+- Diffusion des requêtes, accusés de réception (ack) et libérations (release) aux autres contrôleurs
+- Maintien d’une file d’attente locale des requêtes, triée par estampille et identifiant
+- Autorisation de l’accès à la SC uniquement si la requête locale est la plus ancienne
+- Transmission du signal d’entrée/sortie de SC à l’application
 
 **Gestion des snapshots distribués**
-- Déclenchement et gestion de la capture d’instantanés de l’état global.
-- Utilisation d’horloges vectorielles pour dater les snapshots.
-- Agrégation des états locaux et des messages prépost pour obtenir une image cohérente du système.
+- Déclenchement et gestion de la capture d’instantanés de l’état global
+- Utilisation d’horloges vectorielles pour dater les snapshots
+- Agrégation des états locaux et des messages prépost pour obtenir une image cohérente du système
 
 **Sérialisation et conversion**
-- Conversion des structures complexes (transactions, blocs, blockchain) en chaînes JSON pour la transmission réseau.
+- Conversion des structures complexes (transactions, blocs, blockchain) en chaînes JSON pour la transmission réseau
 
 ### Algorithme d'exécution répartie
 
-Pour garantir la cohérence et l’exclusivité lors du minage, chaque application doit demander l’accès à la section critique (SC) via son contrôleur.
-Le contrôleur utilise un algorithme de file d’attente répartie pour coordonner l’accès à la SC entre tous les sites.
+Pour garantir la cohérence et l’exclusivité lors du minage, chaque application doit demander l’accès à la section critique (SC) via son contrôleur
+Le contrôleur utilise un algorithme de file d’attente répartie pour coordonner l’accès à la SC entre tous les sites
 
 Déroulement :
 
 1/ Demande d’accès à la SC :
-L’application envoie FILE:demandeSC à son contrôleur.
+L’application envoie FILE:demandeSC à son contrôleur
 2/ Propagation de la requête :
-Le contrôleur diffuse une requête à tous les autres contrôleurs, en utilisant une estampille logique (numéro croissant).
+Le contrôleur diffuse une requête à tous les autres contrôleurs, en utilisant une estampille logique (numéro croissant)
 3/ File d’attente répartie :
-Chaque contrôleur maintient une file d’attente locale des requêtes reçues, triées par estampille et identifiant.
+Chaque contrôleur maintient une file d’attente locale des requêtes reçues, triées par estampille et identifiant
 4/ Accès à la SC :
-Un site obtient l’accès à la SC uniquement si sa requête est la plus ancienne (plus petite estampille).
+Un site obtient l’accès à la SC uniquement si sa requête est la plus ancienne (plus petite estampille)
 5/ Début de la SC :
-Le contrôleur envoie CONT:debutSC à son application, qui peut alors miner un bloc.
+Le contrôleur envoie CONT:debutSC à son application, qui peut alors miner un bloc
 6/ Libération de la SC :
-Après le minage, l’application envoie FILE:finSC à son contrôleur, qui va alors diffuser un message de libération à tous les autres.
+Après le minage, l’application envoie FILE:finSC à son contrôleur, qui va alors diffuser un message de libération à tous les autres
 
 ### Algorithme de sauvegarde
 
