@@ -40,7 +40,7 @@ Principales responsabilités :
 - Mise à jour de la blockchain locale et du pool de transactions
 
 **Communication**
-Tous les échanges réseau passent par le contrôleur associé, qui relaie les messages aux autres sites
+- Tous les échanges réseau passent par le contrôleur associé, qui relaie les messages aux autres sites
 
 ## Partie contrôleur
 
