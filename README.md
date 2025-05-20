@@ -8,7 +8,7 @@ Ce projet consiste en une application répartie simulant le fonctionnement d'une
 L'implémentation a été faite en Go et est constituée d'une partie application et d'une partie contrôleur comportant notamment un algorithme de file d'attente répartie et un algorithme de sauvegarde.
 
 ## Lancement
-A l'initialisation, chaque application va génèrer sa propre clé publique/privée et va ensuite partagée sa clé avec les autres sites, tout en récupérant celles des autres. Une fois l'échange de clés terminé l’application ayant la plus grande clé devient l’initiateur. Elle va créer le premier bloc puis l’envoyer aux autres. Les contrôleurs vont également échanger leurs noms pour s’identifier et se synchroniser.
+A l'initialisation, chaque application va génèrer sa propre clé publique/privée et va ensuite partager sa clé avec les autres sites, tout en récupérant celles des autres. Une fois l'échange de clés terminé l’application ayant la plus grande clé devient l’initiateur. Elle va créer le premier bloc puis l’envoyer aux autres. Les contrôleurs vont également échanger leurs noms pour s’identifier et se synchroniser.
    
 ## Partie application
 L’application représente un site de la blockchain et gère toute la logique métier liée à la gestion de la chaîne de blocs.
