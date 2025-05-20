@@ -15,7 +15,7 @@ L’application représente un site de la blockchain et gère toute la logique m
 Elle fonctionne en collaboration étroite avec son contrôleur associé pour garantir la cohérence et la sécurité du système réparti.
 Elle reprend les bases de l'activité 4, garantissant une exécution séquentielle, des actions de lectures et d'écritures atomiques, et une lecture asynchrone.
 
-La corps de l'application se trouve dans le fichier app.go. Les fichiers blockchainStruct.go et serializeStruc.go implémentent les différentes structures et fonctions nécessaire au concept de blockchain (block, transaction, UTXO,...) ainsi que des méthodes de conversion en chaine de caractères de ces dernières pour pouvoir les envoyer dans des messages. 
+La corps de l'application se trouve dans le fichier `app.go`. Les fichiers `blockchainStruct.go` et `serializeStruc.go` implémentent les différentes structures et fonctions nécessaire au concept de blockchain (block, transaction, UTXO,...) ainsi que des méthodes de conversion en chaine de caractères de ces dernières pour pouvoir les envoyer dans des messages. 
 
 Principales responsabilités :
 
@@ -53,7 +53,9 @@ Principales responsabilités :
 Le contrôleur agit comme un médiateur et coordinateur pour l’application.
 Il assure la synchronisation, la diffusion fiable des messages, la gestion de l’exclusion mutuelle (minage) et la capture d’instantanés (snapshots)
 
-Le corps du contrôleur se trouve au sein du fichier controle.go. Les fichiers fileAttente.go et snapshot.go implémentent respectivement les fonctions liés à l'algorithme de la file d'attente et celui de la capture d'instantané. Pour simplifier au maximum la compréhension du code, nous avons fait en sorte que nos programme soit au plus proche de la forme de ces deux algorithmes, en reprenant une fonction par garde. Nous avons dû néamoins ajouter quelques fonctions "utilitaires" nécessaire à l'implémentation en go.
+Le corps du contrôleur se trouve au sein du fichier `controle.go`. Les fichiers `fileAttente.go` et `snapshot.go` implémentent respectivement les fonctions liés à l'algorithme de la file d'attente et celui de la capture d'instantané. Pour simplifier au maximum la compréhension du code, nous avons fait en sorte que nos programme soit au plus proche de la forme de ces deux algorithmes, en reprenant une fonction par garde. Nous avons dû néamoins ajouter quelques fonctions "utilitaires" nécessaire à l'implémentation en go.
+
+Les fichiers `blockchainStruct.go` et `serializeStruct.go` présents dans le dossier `controleur`, sont des copies allégées des fichiers présents dans le dossier `application`, pour des raisons de compatibilité des structures. 
 
 Principales responsabilités :
 
