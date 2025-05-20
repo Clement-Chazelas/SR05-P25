@@ -15,7 +15,7 @@ L’application représente un site de la blockchain et gère toute la logique m
 Elle fonctionne en collaboration étroite avec son contrôleur associé pour garantir la cohérence et la sécurité du système réparti.
 Elle reprend les bases de l'activité 4, garantissant une exécution séquentielle, des actions de lectures et d'écritures atomiques, et une lecture asynchrone.
 
-La corps de l'application se trouve dans le fichier app.go. Les fichiers blockchainStruct.go et serializeStruc.go implémentent les différentes structures et fonctions nécessaire au concept de blockchain (block, transaction, UTXO,...). 
+La corps de l'application se trouve dans le fichier app.go. Les fichiers blockchainStruct.go et serializeStruc.go implémentent les différentes structures et fonctions nécessaire au concept de blockchain (block, transaction, UTXO,...) ainsi que des méthodes de conversion en chaine de caractères de ces dernières pour pouvoir les envoyer dans des messages. 
 
 Principales responsabilités :
 
@@ -42,6 +42,9 @@ Principales responsabilités :
 - Vérification de l’intégrité du bloc (hash, previousHash, validité des transactions, cohérence des UTXO (solde de chaque site))
 - Mise à jour de la blockchain locale et du pool de transactions : les transactions déjà minées sont retirées
 
+**Sérialisation et conversion**
+- Conversion des structures complexes (transactions, blocs, blockchain) en chaînes JSON pour la transmission réseau
+
 **Communication**
 - Tous les échanges au sein du réseau passent par le contrôleur associé, qui relaie les messages aux autres sites en le formattant (ajout du nom, catégorie du message, horloge vectorielle, couleur du contrôleur).
 
@@ -50,22 +53,24 @@ Principales responsabilités :
 Le contrôleur agit comme un médiateur et coordinateur pour l’application.
 Il assure la synchronisation, la diffusion fiable des messages, la gestion de l’exclusion mutuelle (minage) et la capture d’instantanés (snapshots)
 
+Le corps du contrôleur se trouve au sein du fichier controle.go. Les fichiers fileAttente.go et snapshot.go implémentent respectivement les fonctions liés à l'algorithme de la file d'attente et celui de la capture d'instantané. Pour simplifier au maximum la compréhension du code, nous avons fait en sorte que nos programme soit au plus proche de la forme de ces deux algorithmes, en reprenant une fonction par garde. Nous avons dû néamoins ajouter quelques fonctions "utilitaires" nécessaire à l'implémentation en go.
+
 Principales responsabilités :
 
 **Initialisation et identification**
 - Échange des noms entre contrôleurs pour constituer la liste globale des sites
-- Attribution d’un identifiant unique à chaque contrôleur (index dans la liste triée)
-- Transmission du signal de départ à l’application une fois l’initialisation terminée
+- Attribution d’un identifiant unique à chaque contrôleur (index dans la liste triée par ordre alphabétique)
+- Transmission du signal de départ à l’application une fois son initialisation terminée
 
 **Gestion des messages**
-- Lecture continue des messages entrants (depuis l’application ou d’autres contrôleurs
-- Filtrage des messages pour éviter les doublons (car anneau unidirectionnel entre les controleurs)
-- Relais des messages applicatifs, de file d’attente et de snapshot selon leur catégorie
+- Lecture continue des messages entrants (depuis l’application ou d’autres contrôleurs)
+- Filtrage des messages pour éviter les messages venant de soi-même ou qui étaient déstinés à une application (car anneau unidirectionnel entre les controleurs)
+- Traitement des messages applicatifs, de file d’attente et de snapshot selon leur catégorie
 
 **Algorithme de file d’attente répartie**
 - Réception des demandes d’accès à la section critique de l’application
 - Diffusion des requêtes, accusés de réception (ack) et libérations (release) aux autres contrôleurs
-- Maintien d’une file d’attente locale des requêtes, triée par estampille et identifiant
+- Maintien d’une file d’attente locale, contenant les derniers messages de chaque site avec leur estampille.
 - Autorisation de l’accès à la SC uniquement si la requête locale est la plus ancienne
 - Transmission du signal d’entrée/sortie de SC à l’application
 
@@ -74,48 +79,46 @@ Principales responsabilités :
 - Utilisation d’horloges vectorielles pour dater les snapshots
 - Agrégation des états locaux et des messages prépost pour obtenir une image cohérente du système
 
-**Sérialisation et conversion**
-- Conversion des structures complexes (transactions, blocs, blockchain) en chaînes JSON pour la transmission réseau
-
 ## Algorithme d'exécution répartie
 
-Pour garantir la cohérence et l’exclusivité lors du minage, chaque application doit demander l’accès à la section critique (SC) via son contrôleur
-Le contrôleur utilise un algorithme de file d’attente répartie pour coordonner l’accès à la SC entre tous les sites
+Pour garantir la cohérence et l’exclusivité lors du minage, chaque application doit demander l’accès à la section critique (SC) via son contrôleur.
+Le contrôleur utilise un algorithme de file d’attente répartie pour coordonner l’accès à la SC entre tous les sites.
 
 Déroulement :
 
 1. Demande d’accès à la SC :  
-L’application envoie FILE:demandeSC à son contrôleur  
+L’application envoie FILE:demandeSC à son contrôleur.
 2. Propagation de la requête :  
-Le contrôleur diffuse une requête à tous les autres contrôleurs, en utilisant une estampille logique (numéro croissant)  
+Le contrôleur diffuse une requête à tous les autres contrôleurs, en utilisant une estampille logique (numéro croissant).
 3. File d’attente répartie :  
-Chaque contrôleur maintient une file d’attente locale des requêtes reçues, triées par estampille et identifiant  
+Chaque contrôleur maintient une file d’attente locale contenant les derniers messages de chaque site avec leur estampille.  
 4. Accès à la SC :  
-Un site obtient l’accès à la SC uniquement si sa requête est la plus ancienne (plus petite estampille)  
+Un site obtient l’accès à la SC uniquement si sa requête est la plus ancienne (plus petite estampille). En cas d'égalité, la priorité est au site avec le plus petit identifiant.  
 5. Début de la SC :  
-Le contrôleur envoie CONT:debutSC à son application, qui peut alors miner un bloc  
+Le contrôleur envoie CONT:debutSC à son application, qui peut alors miner un bloc.  
 6. Libération de la SC :  
-Après le minage, l’application envoie FILE:finSC à son contrôleur, qui va alors diffuser un message de libération à tous les autres  
+Après le minage, l’application envoie FILE:finSC à son contrôleur, qui va alors diffuser un message de libération à tous les autres. 
 
 ## Algorithme de sauvegarde
 
-Un algortithme de calcul d'instantané (snapshot) a également été mis en place afin d'avoir une image cohérente de l'état global du système, c'est-à-dire essentiellement de la blockchain et les messages en transit (messages prepost). Il est réalisé dans l'optique de réaliser des sauvegardes ou de reprendre l'état du système en cas de défaillance. 
+Un algortithme de calcul d'instantané (snapshot) a également été mis en place afin d'obtenir une image cohérente de l'état global du système, c'est-à-dire une capture de la blockchain et des messages en transit (messages prepost). L'intêret d'un tel algortihme est de réaliser des sauvegardes ou de reprendre l'état du système en cas de défaillance. 
 
 Ainsi, l'approche utilisée dans snapshot.go s'appuie sur le concept d'horloges vectorielles afin de dater correctement les snapshots.
 
 ### Fonctionnement 
 
-1. Initialisation : Une variable couleur permettant d'indentifier les sites marqués est initialisée à blanc ainsi qu'une variable initiateur permettant d'indentifier l'initiateur est initialisée à faux. Une variable pour enregistrer l'état global est également prévue.
+1. Initialisation : Une variable couleur permettant d'indentifier les sites marqués est initialisée à blanc ainsi qu'un booléan permettant d'indentifier l'initiateur est initialisée à faux. Une variable pour enregistrer l'état global est également prévue.
 2. Début de l'instantané : Un des sites initie la capture d'instantané. Il enregistre alors son état local, passe à la couleur rouge et s'indique comme étant l'initiateur. 
 3. Réception d'un message applicatif :
-   Si un site reçoit un message applicatif rouge alors que lui-même est blanc, il passe sa couleur à rouge et enregistre son état local.
-   Sinon, si la couleur de l'expéditeur est blanc et que lui-même est rouge (message envoyé avant que l'expéditeur n'ait pris son instantané), il considère que c'est un message prepost et le renvoie sur l'anneau.
+   Si un site reçoit un message applicatif rouge alors que lui-même est blanc, il passe sa couleur à rouge et enregistre son état local. Il envoi son état local dans un message de type "état".
+   Sinon, si la couleur de l'expéditeur est blanc et que lui-même est rouge (message envoyé avant que l'expéditeur n'ait pris son instantané), il envoi un message de type prépost contenant le message reçu, pour qu'il soit sauvegardé par l'initiateur.
 4. Réception d'un message prepost :
    Si le site est l'initiateur, il ajoute le message à sa liste de messages prepost.
    Sinon, il le renvoie sur l'anneau. 
 6. Réception d'un message état :
    Si le site est l'initiateur, il enregistre l'état local reçu.
    Sinon, il le renvoie sur l'anneau. 
+7. Fin : Une fois que l'initiateur a reçu tous les états locaux, il enregistre l'état global dans un fichier texte : "sauvegarde.txt".
 
 #### Implémentation
 
