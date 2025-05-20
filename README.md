@@ -5,7 +5,7 @@ Projet et devoirs (activités) SR05 semestre P25 | UTC
 
 Ce projet consiste en une application répartie simulant le fonctionnement d'une blockchain. 
 
-L'implémentation a été faite en Go et est constituée d'une partie application et d'une partie contrôleur comportant notamment un algorithme de file d'attente répartie et un algorithme de sauvegarde.
+L'implémentation a été faite en Go et est constituée d'une partie application et d'une partie contrôleur comportant notamment un algorithme de file d'attente répartie et un algorithme de sauvegarde. Les contrôleurs ont été conçus pour communiquer au sein d'un réseau en anneau unidirectionnel, c'est-à-dire que chaque message reçu est relayé au site suivant jusqu'à atteindre l'expéditeur lui-même qui stop la boucle.
 
 ## Lancement
 L'exécution débute par l'initialisation des contrôleurs. Cette initialisation consiste en l'échange de leur nom afin de déterminer leur identifiant (indice de l'ordre alphabétique). Une fois cette phase terminée, le contrôleur prévient son application pour qu'elle puisse débuter. Chaque application va génèrer sa propre clé publique/privée et va ensuite partager sa clé avec les autres sites, tout en récupérant celles des autres. Une fois l'échange de clés terminé l’application ayant la plus grande clé devient l’initiateur. Elle va créer le premier bloc puis l’envoyer aux autres. 
