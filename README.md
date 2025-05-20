@@ -15,7 +15,7 @@ L’application représente un site de la blockchain et gère toute la logique m
 Elle fonctionne en collaboration étroite avec son contrôleur associé pour garantir la cohérence et la sécurité du système réparti.
 Elle reprend les bases de l'activité 4, garantissant une exécution séquentielle, des actions de lectures et d'écritures atomiques, et une lecture asynchrone.
 
-La corps de l'application se trouve dans le fichier `app.go`. Les fichiers `blockchainStruct.go` et `serializeStruc.go` implémentent les différentes structures et fonctions nécessaire au concept de blockchain (block, transaction, UTXO,...) ainsi que des méthodes de conversion en chaine de caractères de ces dernières pour pouvoir les envoyer dans des messages. 
+Le corps de l'application se trouve dans le fichier `app.go`. Les fichiers `blockchainStruct.go` et `serializeStruc.go` implémentent les différentes structures et fonctions nécessaires au concept de blockchain (block, transaction, UTXO,...) ainsi que des méthodes de conversion en chaine de caractères de ces dernières pour pouvoir les envoyer dans des messages. 
 
 Principales responsabilités :
 
@@ -103,17 +103,17 @@ Après le minage, l’application envoie FILE:finSC à son contrôleur, qui va a
 
 ## Algorithme de sauvegarde
 
-Un algortithme de calcul d'instantané (snapshot) a également été mis en place afin d'obtenir une image cohérente de l'état global du système, c'est-à-dire une capture de la blockchain et des messages en transit (messages prepost). L'intêret d'un tel algortihme est de réaliser des sauvegardes ou de reprendre l'état du système en cas de défaillance. 
+Un algortithme de calcul d'instantané (snapshot) a également été mis en place afin d'obtenir une image cohérente de l'état global du système, c'est-à-dire une capture de la blockchain et des messages en transit (messages prepost). L'intérêt d'un tel algortihme est de réaliser des sauvegardes ou de reprendre l'état du système en cas de défaillance. 
 
 Ainsi, l'approche utilisée dans snapshot.go s'appuie sur le concept d'horloges vectorielles afin de dater correctement les snapshots.
 
 ### Fonctionnement 
 
-1. Initialisation : Une variable couleur permettant d'indentifier les sites marqués est initialisée à blanc ainsi qu'un booléan permettant d'indentifier l'initiateur est initialisée à faux. Une variable pour enregistrer l'état global est également prévue.
+1. Initialisation : Une variable couleur permettant d'identifier les sites marqués est initialisée à blanc ainsi qu'un booléen permettant d'identifier l'initiateur est initialisée à faux. Une variable pour enregistrer l'état global est également prévue.
 2. Début de l'instantané : Un des sites initie la capture d'instantané. Il enregistre alors son état local, passe à la couleur rouge et s'indique comme étant l'initiateur. 
 3. Réception d'un message applicatif :
-   Si un site reçoit un message applicatif rouge alors que lui-même est blanc, il passe sa couleur à rouge et enregistre son état local. Il envoi son état local dans un message de type "état".
-   Sinon, si la couleur de l'expéditeur est blanc et que lui-même est rouge (message envoyé avant que l'expéditeur n'ait pris son instantané), il envoi un message de type prépost contenant le message reçu, pour qu'il soit sauvegardé par l'initiateur.
+   Si un site reçoit un message applicatif rouge alors que lui-même est blanc, il passe sa couleur à rouge et enregistre son état local. Il envoie son état local dans un message de type "état".
+   Sinon, si la couleur de l'expéditeur est blanc et que lui-même est rouge (message envoyé avant que l'expéditeur n'ait pris son instantané), il envoie un message de type prépost contenant le message reçu, pour qu'il soit sauvegardé par l'initiateur.
 4. Réception d'un message prepost :
    Si le site est l'initiateur, il ajoute le message à sa liste de messages prepost.
    Sinon, il le renvoie sur l'anneau. 
@@ -124,7 +124,7 @@ Ainsi, l'approche utilisée dans snapshot.go s'appuie sur le concept d'horloges 
 
 ## Utilisation de l'application
 
-Pour lancer l'application, utilisez le script `launch.sh` depuis votre terminal. Le projet a été testé sur l'os Kali basé sur débian, il est possible que l'affichage des couleurs dans le terminal diffère selon l'os.
+Pour lancer l'application, utilisez le script `launch.sh` depuis votre terminal. Le projet a été testé sur l'os Kali basé sur Debian, il est possible que l'affichage des couleurs dans le terminal diffère selon l'os.
 
 #### Lancement
 
