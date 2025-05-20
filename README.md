@@ -74,7 +74,7 @@ Principales responsabilités :
 **Sérialisation et conversion**
 - Conversion des structures complexes (transactions, blocs, blockchain) en chaînes JSON pour la transmission réseau
 
-### Algorithme d'exécution répartie
+## Algorithme d'exécution répartie
 
 Pour garantir la cohérence et l’exclusivité lors du minage, chaque application doit demander l’accès à la section critique (SC) via son contrôleur
 Le contrôleur utilise un algorithme de file d’attente répartie pour coordonner l’accès à la SC entre tous les sites
@@ -94,13 +94,13 @@ Le contrôleur envoie CONT:debutSC à son application, qui peut alors miner un b
 6/ Libération de la SC :
 Après le minage, l’application envoie FILE:finSC à son contrôleur, qui va alors diffuser un message de libération à tous les autres
 
-### Algorithme de sauvegarde
+## Algorithme de sauvegarde
 
 Un algortithme de calcul d'instantané (snapshot) a également été mis en place afin d'avoir une image cohérente de l'état global du système, c'est-à-dire essentiellement de la blockchain et les messages en transit (messages prepost). Il est réalisé dans l'optique de réaliser des sauvegardes ou de reprendre l'état du système en cas de défaillance. 
 
 Ainsi, l'approche utilisée dans snapshot.go s'appuie sur le concept d'horloges vectorielles afin de dater correctement les snapshots.
 
-#### Fonctionnement 
+### Fonctionnement 
 
 1. Initialisation : Une variable couleur permettant d'indentifier les sites marqués est initialisée à blanc ainsi qu'une variable initiateur permettant d'indentifier l'initiateur est initialisée à faux. Une variable pour enregistrer l'état global est également prévue.
 2. Début de l'instantané : Un des sites initie la capture d'instantané. Il enregistre alors son état local, passe à la couleur rouge et s'indique comme étant l'initiateur. 
