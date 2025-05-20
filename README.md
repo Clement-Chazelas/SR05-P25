@@ -122,7 +122,7 @@ Ainsi, l'approche utilisée dans snapshot.go s'appuie sur le concept d'horloges 
 
 ## Utilisation de l'application
 
-Pour lancer l'application, utilisez le script `launch.sh` depuis votre terminal.
+Pour lancer l'application, utilisez le script `launch.sh` depuis votre terminal. Le projet a été testé sur l'os Kali basé sur débian, il est possible que l'affichage des couleurs dans le terminal diffère selon l'os.
 
 #### Lancement
 
@@ -139,3 +139,17 @@ Pour démarrer une sauvegarde, utilisez le script `snapshot.sh` depuis votre ter
 ./snapshot.sh
 ```
 
+#### Build
+
+Le projet contient les exécutables pré-compilés, mais il est possible de les générer soi-même.
+
+Au sein du dossier `application`
+```bash
+go get app
+go build app
+```
+
+Au sein du dossier `controleur`
+```bash
+go build ctl
+```
