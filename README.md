@@ -82,18 +82,18 @@ Le contrôleur utilise un algorithme de file d’attente répartie pour coordonn
 
 Déroulement :
 
-1/ Demande d’accès à la SC :
-L’application envoie FILE:demandeSC à son contrôleur
-2/ Propagation de la requête :
-Le contrôleur diffuse une requête à tous les autres contrôleurs, en utilisant une estampille logique (numéro croissant)
-3/ File d’attente répartie :
-Chaque contrôleur maintient une file d’attente locale des requêtes reçues, triées par estampille et identifiant
-4/ Accès à la SC :
-Un site obtient l’accès à la SC uniquement si sa requête est la plus ancienne (plus petite estampille)
-5/ Début de la SC :
-Le contrôleur envoie CONT:debutSC à son application, qui peut alors miner un bloc
-6/ Libération de la SC :
-Après le minage, l’application envoie FILE:finSC à son contrôleur, qui va alors diffuser un message de libération à tous les autres
+1. Demande d’accès à la SC :  
+L’application envoie FILE:demandeSC à son contrôleur  
+2. Propagation de la requête :  
+Le contrôleur diffuse une requête à tous les autres contrôleurs, en utilisant une estampille logique (numéro croissant)  
+3. File d’attente répartie :  
+Chaque contrôleur maintient une file d’attente locale des requêtes reçues, triées par estampille et identifiant  
+4. Accès à la SC :  
+Un site obtient l’accès à la SC uniquement si sa requête est la plus ancienne (plus petite estampille)  
+5. Début de la SC :  
+Le contrôleur envoie CONT:debutSC à son application, qui peut alors miner un bloc  
+6. Libération de la SC :  
+Après le minage, l’application envoie FILE:finSC à son contrôleur, qui va alors diffuser un message de libération à tous les autres  
 
 ## Algorithme de sauvegarde
 
