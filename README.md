@@ -15,6 +15,8 @@ L’application représente un site de la blockchain et gère toute la logique m
 Elle fonctionne en collaboration étroite avec son contrôleur associé pour garantir la cohérence et la sécurité du système réparti.
 Elle reprend les bases de l'activité 4, garantissant une exécution séquentielle, des actions de lectures et d'écritures atomiques, et une lecture asynchrone.
 
+La corps de l'application se trouve dans le fichier app.go. Les fichiers blockchainStruct.go et serializeStruc.go implémentent les différentes structures et fonctions nécessaire au concept de blockchain (block, transaction, UTXO,...). 
+
 Principales responsabilités :
 
 **Initialisation**
