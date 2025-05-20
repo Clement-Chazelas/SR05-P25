@@ -8,19 +8,61 @@ Ce projet consiste en une application répartie simulant le fonctionnement d'une
 L'implémentation a été faite en Go et est constituée d'une partie application et d'une partie contrôleur comportant notamment un algorithme de file d'attente répartie et un algorithme de sauvegarde.
 
 ## Lancement
-
+A l'initialisation, chaque application va génèrer sa propre clé publique/privée et va ensuite partagée sa clé avec les autres sites, tout en récupérant celles des autres. Une fois l'échange de clés terminé l’application ayant la plus grande clé devient l’initiateur. Elle va créer le premier bloc puis l’envoyer aux autres. Les contrôleurs vont également échanger leurs noms pour s’identifier et se synchroniser.
+   
 ## Partie application
+L’application représente un site de la blockchain et gère toute la logique métier liée à la gestion de la chaîne de blocs.
+Elle fonctionne en collaboration étroite avec son contrôleur associé pour garantir la cohérence et la sécurité du système réparti.
 
+Principales responsabilités :
+
+**Initialisation**
+- Génération de la paire de clés publique/privée (ECDSA).
+- Échange des clés publiques et des noms avec les autres sites via le contrôleur.
+- Création du bloc initial (genesis) par le site ayant la plus grande clé publique, puis diffusion à tous les autres.
+
+**Gestion des transactions**
+- Création de transactions (expéditeur, destinataire, montant, timestamp, signature).
+- Signature des transactions avec la clé privée locale.
+- Envoi des transactions aux autres sites via le contrôleur.
+- Réception, vérification (signature, solde suffisant) et ajout des transactions reçues dans le pool d’attente.
+
+**Minage et section critique**
+- Demande d’accès à la section critique (SC) auprès du contrôleur pour miner un bloc.
+- Regroupement des transactions en attente dans un nouveau bloc.
+- Calcul du hash du bloc (preuve de travail : hash commençant par 00000).
+- Ajout du bloc miné à la blockchain locale.
+- Envoi du bloc miné aux autres sites via le contrôleur.
+
+**Propagation et validation**
+- Réception des blocs minés par les autres sites.
+- Vérification de l’intégrité du bloc (hash, previousHash, validité des transactions, cohérence des UTXO).
+- Mise à jour de la blockchain locale et du pool de transactions.
+
+**Communication**
+Tous les échanges réseau passent par le contrôleur associé, qui relaie les messages aux autres sites.
 
 ## Partie contrôleur
 
 ### Algorithme d'exécution répartie
 
-Afin de mettre en oeuvre l'exécution répartie, un algortithme tel que vu dans le cours a été mis en place.
+Pour garantir la cohérence et l’exclusivité lors du minage, chaque application doit demander l’accès à la section critique (SC) via son contrôleur.
+Le contrôleur utilise un algorithme de file d’attente répartie pour coordonner l’accès à la SC entre tous les sites.
 
-### Algorithme de file d'attente répartie
+Déroulement :
 
-Etant donné qu'un seul site peut miner à la fois pour éviter les conflits et assurer la cohérence de la chaîne, un algortihme de file d'attente répartie a été implémenté. Il permet un accès exclusif à la ressource de minage grâce à la demande d'une section critique. 
+1/ Demande d’accès à la SC :
+L’application envoie FILE:demandeSC à son contrôleur.
+2/ Propagation de la requête :
+Le contrôleur diffuse une requête à tous les autres contrôleurs, en utilisant une estampille logique (numéro croissant).
+3/ File d’attente répartie :
+Chaque contrôleur maintient une file d’attente locale des requêtes reçues, triées par estampille et identifiant.
+4/ Accès à la SC :
+Un site obtient l’accès à la SC uniquement si sa requête est la plus ancienne (plus petite estampille).
+5/ Début de la SC :
+Le contrôleur envoie CONT:debutSC à son application, qui peut alors miner un bloc.
+6/ Libération de la SC :
+Après le minage, l’application envoie FILE:finSC à son contrôleur, qui va alors diffuser un message de libération à tous les autres.
 
 ### Algorithme de sauvegarde
 
