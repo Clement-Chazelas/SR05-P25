@@ -120,12 +120,22 @@ Ainsi, l'approche utilisée dans snapshot.go s'appuie sur le concept d'horloges 
    Sinon, il le renvoie sur l'anneau. 
 7. Fin : Une fois que l'initiateur a reçu tous les états locaux, il enregistre l'état global dans un fichier texte : "sauvegarde.txt".
 
-#### Implémentation
+## Utilisation de l'application
 
-InitSnapshot() : initialise la capture d'instantané sur le site actuel
-sendSnapshotMessage() : envoie un message de snapshot formaté
-ReceiveAppMessage() : gère les messages applicatifs et détecte les messages prepost pour sauvegarder l'état des canaux
-ReceivePrepostMessage() : gère les messages prepost, c'est-à-dire la réception des messages prepost des sites non marqués
-ReceiveStateMessage() : gère les messages état, c'est-à-dire la réception d'un état local distant
+Pour lancer l'application, utilisez le script `launch.sh` depuis votre terminal.
 
-Des fonctions utilitaires notamment de conversion des types sont également implémentées. 
+#### Lancement
+
+```bash
+./launch.sh [v]
+```
+Le paramètre v est optionnel et permet d'activer le mode verbeux, dans ce cas les applications génèrent un affichage pour chaque message reçu.
+
+#### Initialisation d'une sauvegarde
+
+Pour démarrer une sauvegarde, utilisez le script `snapshot.sh` depuis votre terminal.
+
+```bash
+./snapshot.sh
+```
+
