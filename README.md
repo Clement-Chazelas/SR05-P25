@@ -13,6 +13,7 @@ L'exécution débute par l'initialisation des contrôleurs. Cette initialisation
 ## Partie application
 L’application représente un site de la blockchain et gère toute la logique métier liée à la gestion de la chaîne de blocs.
 Elle fonctionne en collaboration étroite avec son contrôleur associé pour garantir la cohérence et la sécurité du système réparti.
+Elle reprend les bases de l'activité 4, garantissant une exécution séquentielle, des actions de lectures et d'écritures atomiques, et une lecture asynchrone.
 
 Principales responsabilités :
 
