@@ -28,7 +28,7 @@ Principales responsabilités :
 - Réception, vérification (signature, solde suffisant) et ajout des transactions reçues dans le pool d’attente
 
 **Minage et section critique**
-- Demande d’accès à la section critique (SC) auprès du contrôleur pour miner un bloc
+- Demande d’accès à la section critique (SC) auprès du contrôleur pour miner un bloc lorsqu'il existe au moins une transaction en attente
 - Regroupement des transactions en attente dans un nouveau bloc
 - Calcul du hash du bloc (preuve de travail : hash commençant par 00000)
 - Ajout du bloc miné à la blockchain locale
@@ -36,8 +36,8 @@ Principales responsabilités :
 
 **Propagation et validation**
 - Réception des blocs minés par les autres sites
-- Vérification de l’intégrité du bloc (hash, previousHash, validité des transactions, cohérence des UTXO)
-- Mise à jour de la blockchain locale et du pool de transactions
+- Vérification de l’intégrité du bloc (hash, previousHash, validité des transactions, cohérence des UTXO (solde de chaque site))
+- Mise à jour de la blockchain locale et du pool de transactions : les transactions déjà minées sont retirées
 
 **Communication**
 - Tous les échanges réseau passent par le contrôleur associé, qui relaie les messages aux autres sites
