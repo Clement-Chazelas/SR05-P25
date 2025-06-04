@@ -14,7 +14,6 @@ var fieldsep = "$"
 var keyvalsep = "~"
 
 const (
-	MsgSender     = "sdr"
 	MsgCategory   = "cat"
 	MsgData       = "dat"
 	MsgPath       = "pth"
