@@ -5,37 +5,36 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"sort"
+	"slices"
+	_ "sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
-var fieldsep = "$"
-var keyvalsep = "~"
+var fieldsep = "§"
+var keyvalsep = "£"
 
 const (
-	MsgCategory   = "cat"
-	MsgData       = "dat"
-	MsgPath       = "pth"
-	MsgType       = "typ"
-	MsgInit       = "init"
-	MsgPropagation = "prop"
+	MsgSender      = "sdr"
 	MsgDestination = "dest"
-
-	ToCtrl = "CTRL:"
-	ToNET  = "NET:"
+	MsgCategory    = "cat"
+	MsgData        = "dat"
+	MsgPath        = "pth"
+	MsgType        = "typ"
+	electionInit   = "eli"
+	controleur     = "ctr"
 )
 
 var (
-	pNom     = flag.String("n", "NET", "Nom du noeud")
-	Nom      string
-	pid      = os.Getpid()
-	stderr   = log.New(os.Stderr, "", 0)
-	Parent   string
-	Children []string
-	MyId     int = -1
-	Peers    = make(map[string]bool)
-	Historique []string // derniers ids qui ont traité un message
+	pNom        = flag.String("n", "NET", "Nom du noeud")
+	Nom         string
+	pid         = os.Getpid()
+	stderr      = log.New(os.Stderr, "", 0)
+	MyId        = pid
+	NbVoisins   = -1
+	NbSites     = -1
+	ListVoisins []int
 )
 
 func MsgFormat(key, val string) string {
@@ -57,122 +56,104 @@ func findval(msg, key string) string {
 }
 
 func initialisation() {
-	Nom = *pNom + "-" + strconv.Itoa(pid)
-	fmt.Println(Nom)
+
+	fmt.Println(MyId)
 
 	// Lecture des autres NET pour initialisation
 	var received string
-	Peers[Nom] = true
-	for len(Peers) < 3 { // À adapter selon NbNet souhaité
+	heureDebut := time.Now()
+	deadline := heureDebut.Add(5 * time.Second)
+	for time.Now().Before(deadline) {
 		fmt.Scanln(&received)
-		if received == Nom || Peers[received] {
-			continue
-		}
-		Peers[received] = true
-		fmt.Println(received)
+		idVoisin, _ := strconv.Atoi(received)
+		ListVoisins = append(ListVoisins, idVoisin)
 	}
+	NbVoisins = len(ListVoisins)
 
-	// Création de l’arborescence
-	names := []string{}
-	for k := range Peers {
-		names = append(names, k)
-	}
-	sort.Strings(names)
-	for i, name := range names {
-		if name == Nom {
-			MyId = i
-		}
-	}
-	// Choix du parent et enfants
-	if MyId > 0 {
-		Parent = names[(MyId-1)/2]
-	}
-	left := 2*MyId + 1
-	right := 2*MyId + 2
-	if left < len(names) {
-		Children = append(Children, names[left])
-	}
-	if right < len(names) {
-		Children = append(Children, names[right])
-	}
+	DemarrerElection()
 
-	display_d("initialisation", fmt.Sprintf("Id: %d, Parent: %s, Children: %v", MyId, Parent, Children))
-	fmt.Printf("NET:init:%d:%s\n", MyId, Nom)
-}
+	// Tant que je n'ai pas gagné l'élection (je n'ai pas fini de compter le nb de sites)
+	for NbSites == -1 {
+		fmt.Scanln(&received)
 
-
-func dejaTraite(msg string) bool {
-	path := findval(msg, MsgPath)
-	if path == "" {
-		return false
-	}
-	for _, id := range strings.Split(path, ",") {
-		if id == strconv.Itoa(MyId) {
-			return true
+		msgCat := findval(received, MsgCategory)
+		switch msgCat {
+		case electionInit:
+			recevoirMessageElection(received)
 		}
 	}
-	return false
-}
 
-func ajouterHistorique(id int) {
-	if len(Historique) >= 2 {
-		Historique = Historique[1:]
+	if win {
+		// J'ai remporté l'élection, je transmets le nb de site à mes enfants
+		envoyerA(nombreSites, strconv.Itoa(NbSites), enfants)
 	}
-	Historique = append(Historique, strconv.Itoa(id))
+	stderr.Println("Fin de l'initialisation")
+	fmt.Printf("start:%s\n",NbSites)
 }
 
-
-func traiterInit(msg string) {
-	display_d("init", "Traitement vague d’init")
-	transmettreAuxEnfants(msg)
+func majHistorique(msg string) string {
+	hist := strToIntTab(findval(msg, MsgPath))
+	hist[0] = hist[1]
+	hist[1] = MyId
+	newMsg := MsgFormat(MsgSender, findval(msg, MsgSender)) + MsgFormat(MsgCategory, findval(msg, MsgCategory)) +
+		MsgFormat(MsgData, findval(msg, MsgData)) + MsgFormat(MsgPath, intTabToStr(hist))
+	return newMsg
 }
-
-func transmettreAuxEnfants(msg string) {
-	for _, child := range Children {
-		newMsg := msg + MsgFormat(MsgPath, strconv.Itoa(MyId))
-		fmt.Printf("NET:%s\n", newMsg)
-	}
-}
-
-func versControleur(msg string) {
-	fmt.Printf("CTRL:%s\n", msg)
-}
-
-
 
 func main() {
 	flag.Parse()
+	Nom = *pNom + "-" + strconv.Itoa(pid)
 	initialisation()
 
-	var msg string
+	var rcvmsg string
 	for {
-		fmt.Scanln(&msg)
+		fmt.Scanln(&rcvmsg)
 
-		if findval(msg, MsgSender) == Nom {
+		if rcvmsg[:5] == "CONT:" || rcvmsg[:4] == "NET:" {
+			//Ce message n'était pas à destination du NET
+			rcvmsg = ""
 			continue
 		}
-
-		// Empêcher les re-traitements
-		if dejaTraite(msg) {
-			display_d("main", "Message déjà traité")
-			continue
-		}
-		ajouterHistorique(MyId)
 
 		// Traitement des messages
-		rcvCat := findval(msg, MsgCategory)
+		rcvCat := findval(rcvmsg, MsgCategory)
+		if rcvCat != "" {
+			// Le message vient d'un autre NET
+			msgSdr := findval(rcvmsg, MsgSender)
+			sdrId, _ := strconv.Atoi(msgSdr)
 
-		switch rcvCat {
-		case MsgInit:
-			// Traitement spécial pour vague d'init
-			traiterInit(msg)
-		case MsgPropagation:
-			// Propagation descendante
-			transmettreAuxEnfants(msg)
-		case MsgType:
-			// Autres types de message
-			versControleur(msg)
+			if sdrId != parent || !slices.Contains(enfants, sdrId) {
+				// Si le message ne vient pas de mon parent ou de mes enfants, je le rejette
+				continue
+			}
+
+			msgHist := findval(rcvmsg, MsgPath)
+			hist := strToIntTab(msgHist)
+
+			if slices.Contains(hist, MyId) {
+				// j'ai déjà traité ce message
+				continue
+			}
+
+			switch rcvCat {
+			case controleur:
+
+				rcvData := findval(rcvmsg, MsgData)
+				//Envoi de la donnée reçue au controleur avec le préfixe "NET:"
+				fmt.Printf("NET:%s\n", rcvData)
+
+				//Relai du message dans le réseau en mettant à jour l'historique
+				fmt.Println(majHistorique(rcvmsg))
+				break
+			}
+
+		} else {
+			// Le message vient de mon controleur
+			newMessage := MsgFormat(MsgSender, strconv.Itoa(MyId)) +
+				MsgFormat(MsgCategory, controleur) +
+				MsgFormat(MsgPath, intTabToStr([]int{MyId, MyId})) +
+				MsgFormat(MsgData, rcvmsg)
+			fmt.Println(newMessage)
 		}
 	}
 }
-
