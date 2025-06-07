@@ -137,10 +137,44 @@ func initialisation() {
 	return
 }
 
+func initialisationNouveauSite() {
+	var rcvmsg string
+
+	for {
+		fmt.Scanln(&rcvmsg)
+
+		if rcvmsg[:4] != "NET:" {
+			rcvmsg = ""
+			continue
+		}
+
+		rcvmsg = rcvmsg[4:]
+
+		if strings.HasPrefix(rcvmsg, "controller:") {
+			Sites = append(Sites, rcvmsg[11:])
+		} else if strings.HasPrefix(rcvmsg, "blockchain:") {
+			localBlockchain = ReceiveBlockchain(rcvmsg[11:])
+		} else if strings.HasPrefix(rcvmsg, "queue:") {
+			//fileAtt = rcvmsg[6:]
+			//Faire file d'attente, format chiant
+		}
+
+		break
+	}
+
+	//Lancement de l'initialisation de l'app et envoi des infos nécessaires
+	fmt.Printf("CONT:start:%d\n", NbSite)
+	fmt.Printf("CONT:blockchain:%s\n", localBlockchain)
+
+	return
+
+}
+
 // Fonction principale du controleur, elle lit les messages entrants et les traite dans une boucle infinie
 func main() {
 	var rcvmsg string
 	var pNom = flag.String("n", "controle", "Nom")
+	var pNouveauSite = flag.Bool("new", false, "Nouveau site")
 	flag.Parse()
 
 	// Récupération du nom donnée par l'utilisateur
@@ -158,7 +192,11 @@ func main() {
 		}
 	}
 	// Lancement de l'initialisation des controleurs
-	initialisation()
+	if *pNouveauSite {
+		initialisationNouveauSite()
+	} else {
+		initialisation()
+	}
 
 	for {
 

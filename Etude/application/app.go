@@ -120,6 +120,42 @@ func sendInitialisation() {
 	}
 }
 
+func sendInitialisationNouveauSite() {
+	isKeySent := false
+	for {
+		// Je n'ai pas envoyé ma clé
+		if !isKeySent {
+			mutex.Lock()
+
+			stderr.Println(Nom, "J'envoie ma clé aux autres sites")
+			// Envoi de la clé et du nom du site avec le préfixe "K:"
+			fmt.Printf("%sK:%s%s\n", prefix, Nom, SendPublicKey(&sitePubKey))
+
+			mutex.Unlock()
+			isKeySent = true
+			time.Sleep(time.Duration(1) * time.Second)
+		}
+
+		var rcvmsg string
+
+		for {
+			fmt.Scanln(&rcvmsg)
+
+			if rcvmsg[:5] != "CONT:" {
+				rcvmsg = ""
+				continue
+			}
+
+			rcvmsg = rcvmsg[5:]
+			if strings.HasPrefix(rcvmsg, "blockchain:") {
+				//blockChain = ReceiveBlockchain(rcvmsg[11:])
+			}
+		}
+
+		time.Sleep(time.Duration(1) * time.Second)
+	}
+}
+
 // sendMain est la fonction d'écriture principale de l'application.
 // Elle mine un block lorsque c'est possible, et envoie une transaction sinon.
 // L'accès en écriture à la blockchain respecte l'algorithme de la file d'attente répartie.
@@ -325,6 +361,7 @@ func main() {
 
 	// Récupération du nom donnée par l'utilisateur et du mode verbose.
 	pNom := flag.String("n", "app", "Nom")
+	pNouveauSite := flag.Bool("nouveauSite", false, "Nouveau site")
 	flag.BoolVar(&verbose, "v", false, "Activer le mode verbose")
 	flag.Parse()
 
@@ -351,7 +388,12 @@ func main() {
 	stderr.Println(Nom, "Je commence mon initialisation")
 
 	// Démarrage des goroutines de lecture et d'écriture.
-	go sendInitialisation()
+	if *pNouveauSite {
+		go sendInitialisationNouveauSite()
+	} else {
+		go sendInitialisation()
+	}
+
 	go receive(fin)
 
 	// Attente bloquante de la fin des goroutines

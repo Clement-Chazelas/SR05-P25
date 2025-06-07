@@ -28,17 +28,24 @@ const (
 	MsgType        = "typ"
 	electionInit   = "eli"
 	controleur     = "ctr"
+	admission      = "adm"
+	admResponse    = "res"
 )
 
 var (
-	pNom        = flag.String("n", "NET", "Nom du noeud")
-	Nom         string
-	pid         = os.Getpid()
-	stderr      = log.New(os.Stderr, "", 0)
-	MyId        = pid
-	NbVoisins   int
-	NbSites     = -1
-	ListVoisins []int
+	pNom            = flag.String("n", "NET", "Nom du noeud")
+	pNouveauSite    = flag.Bool("new", false, "Nouveau site")
+	Nom             string
+	pid             = os.Getpid()
+	stderr          = log.New(os.Stderr, "", 0)
+	MyId            = pid
+	NbVoisins       int
+	NbSites         = -1
+	ListVoisins     []int
+	blockchainData  = ""
+	queueData       = ""
+	controllerNames = []string{}
+	ListEnfants     []int
 )
 
 func MsgFormat(key string, val string) string {
@@ -60,6 +67,59 @@ func findval(msg string, key string) string {
 	}
 	return ""
 
+}
+
+func demanderAdmission() {
+	msg := MsgFormat(MsgSender, strconv.Itoa(MyId)) +
+		MsgFormat(MsgCategory, admission) +
+		MsgFormat(MsgPath, intTabToStr(ListVoisins))
+	fmt.Println(msg)
+
+	var received string
+
+	for {
+		fmt.Scanln(&received)
+		if findval(received, MsgCategory) == admResponse {
+
+			//On récupère les données de la aprt du parent
+			blockchainData = findval(received, "blockchain")
+			NbSites, _ = strconv.Atoi(findval(received, "nbSites"))
+			queueData = findval(received, "queue")
+			controllerNames = strings.Split(findval(received, "controllerNames"), ",")
+
+			//On dit au controller de lancer son initialisation
+			fmt.Printf("NET:start:%d\n", NbSites)
+
+			//On envoie les données nécessaires à l'initialisation du contrôleur
+			fmt.Printf("NET:blockchain:%s\n", blockchainData)
+			fmt.Printf("NET:queue:%s\n", queueData)
+			for _, name := range controllerNames {
+				fmt.Printf("NET:controller:%s\n", name)
+			}
+
+			break
+		}
+	}
+}
+
+func traiterMessageAdmission(rcvmsg string) {
+	senderID, _ := strconv.Atoi(findval(rcvmsg, MsgSender))
+
+	DemarrerElection()
+
+	//Si j'ai gagné l'election ou si je suis la racine, alors je deviens le parent du demandeur
+	if win || parent == MyId {
+		//On ajoute le demandeur au parent en tant qu'enfant
+		ListEnfants = append(ListEnfants, senderID)
+
+		//On envoie au nouveau site les infos nécessaires à son initialisation
+		infos := MsgFormat(MsgSender, strconv.Itoa(MyId)) +
+			MsgFormat(MsgCategory, admResponse) +
+			MsgFormat(MsgDestination, strconv.Itoa(MyId)) +
+			MsgFormat("blockchain", blockchainData) +
+			MsgFormat("queue", intTabToStr(ListVoisins))
+		fmt.Println(infos)
+	}
 }
 
 func initialisation() {
@@ -117,7 +177,13 @@ func majHistorique(msg string) string {
 func main() {
 	flag.Parse()
 	Nom = *pNom + "-" + strconv.Itoa(pid)
-	initialisation()
+
+	//On check si c'est un nouveau site ou pas, si oui on demande l'admission, si non alors on s'initialise normalement
+	if *pNouveauSite {
+		demanderAdmission()
+	} else {
+		initialisation()
+	}
 
 	var rcvmsg string
 	for {
@@ -136,9 +202,11 @@ func main() {
 			sdrId, _ := strconv.Atoi(msgSdr)
 
 			if sdrId != parent && !slices.Contains(enfants, sdrId) {
-				// Si le message ne vient pas de mon parent ou de mes enfants, je le rejette
-				rcvmsg = ""
-				continue
+				// Si le message ne vient pas de mon parent ou de mes enfants, et que ce n'est pas une demande d'admission, je le rejette
+				if findval(rcvmsg, MsgCategory) != admission {
+					rcvmsg = ""
+					continue
+				}
 			}
 
 			msgHist := findval(rcvmsg, MsgPath)
@@ -160,6 +228,9 @@ func main() {
 				//Relai du message dans le réseau en mettant à jour l'historique
 				fmt.Println(majHistorique(rcvmsg))
 				break
+
+			case admission:
+				traiterMessageAdmission(rcvmsg)
 			}
 			rcvmsg = ""
 
