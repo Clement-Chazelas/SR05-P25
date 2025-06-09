@@ -147,13 +147,13 @@ func sendInitialisationNouveauSite() {
 			}
 
 			rcvmsg = rcvmsg[5:]
-			if strings.HasPrefix(rcvmsg, "blockchain:") {
+			if rcvmsg[:11] == "blockchain:" {
 				rcvBlockchain := ReceiveBlockchain(rcvmsg[11:])
 				blockChain = rcvBlockchain.ToBlockchain()
+				break
 			}
 		}
 
-		time.Sleep(time.Duration(1) * time.Second)
 	}
 }
 
@@ -207,8 +207,16 @@ func sendMain() {
 				// En attendant l'autorisation d'accès à la section critique, j'envoie une transaction
 				mutex.Lock()
 
+				// Je ne connais personne, je ne génère pas de transaction
+				if len(adressOfSites) == 0 {
+					time.Sleep(time.Duration(1) * time.Second)
+					mutex.Unlock()
+					continue
+				}
+
 				// Montant et déstinataire choisi aléatoirement
 				amount := mrand.Intn(10) + 1
+
 				index := mrand.Intn(len(adressOfSites))
 
 				//Initialisation de la transaction et signature
@@ -245,6 +253,13 @@ func sendMain() {
 			}
 
 			mutex.Lock()
+
+			// Je ne connais personne, je ne génère pas de transaction
+			if len(adressOfSites) == 0 {
+				time.Sleep(time.Duration(1) * time.Second)
+				mutex.Unlock()
+				continue
+			}
 
 			// Montant et déstinataire choisi aléatoirement
 			amount := mrand.Intn(10) + 1
