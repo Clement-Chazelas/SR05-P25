@@ -143,6 +143,8 @@ func initialisation() {
 func initialisationNouveauSite() {
 	var rcvmsg string
 
+	vectorClock = make([]int, NbSite)
+
 	for {
 		fmt.Scanln(&rcvmsg)
 
@@ -153,16 +155,17 @@ func initialisationNouveauSite() {
 
 		rcvmsg = rcvmsg[4:]
 
-		if strings.HasPrefix(rcvmsg, "controller:") {
-			Sites = append(Sites, rcvmsg[11:])
-		} else if strings.HasPrefix(rcvmsg, "blockchain:") {
-			localBlockchain = ReceiveBlockchain(rcvmsg[11:])
-		} else if strings.HasPrefix(rcvmsg, "queue:") {
+		if rcvmsg[:11] == "controleur:" {
+			Sites = strings.Split(rcvmsg[11:], ",")
+			Sites = append(Sites, Nom)
+		} else if rcvmsg[:6] == "queue:" {
 			//fileAtt = rcvmsg[6:]
 			//Faire fonction pourenvoyer et recevoir file d'attnte en JSON
+		} else if rcvmsg[:11] == "blockchain:" {
+			localBlockchain = ReceiveBlockchain(rcvmsg[11:])
+			break
 		}
 
-		break
 	}
 
 	// Envoyer message de nouveau
@@ -170,7 +173,7 @@ func initialisationNouveauSite() {
 	fmt.Println(newMsg)
 	//Lancement de l'initialisation de l'app et envoi des infos nécessaires
 	fmt.Printf("CONT:start:%d\n", NbSite)
-	fmt.Printf("CONT:blockchain:%s\n", localBlockchain)
+	fmt.Printf("CONT:blockchain:%s\n", SendBlockchain(localBlockchain.ToBlockchain()))
 
 	return
 
