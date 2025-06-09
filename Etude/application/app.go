@@ -148,7 +148,8 @@ func sendInitialisationNouveauSite() {
 
 			rcvmsg = rcvmsg[5:]
 			if strings.HasPrefix(rcvmsg, "blockchain:") {
-				//blockChain = ReceiveBlockchain(rcvmsg[11:])
+				rcvBlockchain := ReceiveBlockchain(rcvmsg[11:])
+				blockChain = rcvBlockchain.ToBlockchain()
 			}
 		}
 

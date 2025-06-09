@@ -58,6 +58,7 @@ const (
 	app           string = "app"
 	file          string = "file"
 	snapshot      string = "snapshot"
+	newSite       string = "newsite"
 )
 
 // MsgFormat construit une partie de message formatée avec une clé et une valeur
@@ -132,8 +133,10 @@ func initialisation() {
 
 	display_d("initialisation", "Fin")
 
+	fmt.Printf("Controleurs:%s\n", strings.Join(Sites, ","))
 	// Envoi du signal de départ à l'application
 	fmt.Printf("CONT:start:%d\n", NbSite)
+
 	return
 }
 
@@ -156,12 +159,15 @@ func initialisationNouveauSite() {
 			localBlockchain = ReceiveBlockchain(rcvmsg[11:])
 		} else if strings.HasPrefix(rcvmsg, "queue:") {
 			//fileAtt = rcvmsg[6:]
-			//Faire file d'attente, format chiant
+			//Faire fonction pourenvoyer et recevoir file d'attnte en JSON
 		}
 
 		break
 	}
 
+	// Envoyer message de nouveau
+	newMsg := MsgFormat(MsgSender, Nom) + MsgFormat(MsgCategory, newSite)
+	fmt.Println(newMsg)
 	//Lancement de l'initialisation de l'app et envoi des infos nécessaires
 	fmt.Printf("CONT:start:%d\n", NbSite)
 	fmt.Printf("CONT:blockchain:%s\n", localBlockchain)
@@ -219,16 +225,6 @@ func main() {
 		}
 
 		if rcvmsg[:8] == "newCont:" {
-			NbSite++
-
-			Sites = append(Sites, rcvmsg[8:])
-			sort.Strings(Sites)
-			MyId = sort.SearchStrings(Sites, Nom)
-
-			newContIndex = sort.SearchStrings(Sites, rcvmsg[8:])
-			fileAtt = addSiteToFile(newContIndex)
-			vectorClock = addSiteToClock(vectorClock, newContIndex)
-			continue
 
 		}
 
@@ -270,6 +266,20 @@ func main() {
 					}
 				}
 				break
+			case newSite:
+				NbSite++
+				newName := findval(rcvmsg, MsgSender)
+				Sites = append(Sites, newName)
+				sort.Strings(Sites)
+				MyId = sort.SearchStrings(Sites, Nom)
+
+				newContIndex = sort.SearchStrings(Sites, newName)
+				fileAtt = addSiteToFile(newContIndex)
+				vectorClock = addSiteToClock(vectorClock, newContIndex)
+
+				fmt.Printf("Controleurs:%s\n", strings.Join(Sites, ","))
+				// Envoyer file att
+				continue
 			}
 		} else {
 			//Le message vient de l'application
@@ -282,6 +292,7 @@ func main() {
 
 				// Copie locale de la blockchain
 				localBlockchain = ReceiveBlockchain(rcvmsg[5:])
+				fmt.Printf("Blockchain:%s\n", rcvmsg[5:])
 			} else if rcvmsg[:5] == "CONT:" {
 				// Ignorer : ce message vient d'un autre controleur pour son application
 				rcvmsg = ""

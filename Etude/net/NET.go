@@ -71,8 +71,7 @@ func findval(msg string, key string) string {
 
 func demanderAdmission() {
 	msg := MsgFormat(MsgSender, strconv.Itoa(MyId)) +
-		MsgFormat(MsgCategory, admission) +
-		MsgFormat(MsgPath, intTabToStr(ListVoisins))
+		MsgFormat(MsgCategory, admission)
 	fmt.Println(msg)
 
 	var received string
@@ -117,7 +116,8 @@ func traiterMessageAdmission(rcvmsg string) {
 			MsgFormat(MsgCategory, admResponse) +
 			MsgFormat(MsgDestination, strconv.Itoa(MyId)) +
 			MsgFormat("blockchain", blockchainData) +
-			MsgFormat("queue", intTabToStr(ListVoisins))
+			MsgFormat("queue", queueData) +
+			MsgFormat("controllerNames", strings.Join(controllerNames, ","))
 		fmt.Println(infos)
 	}
 }
@@ -235,6 +235,14 @@ func main() {
 			rcvmsg = ""
 
 		} else {
+
+			if rcvmsg[:11] == "Blockchain:" {
+				blockchainData = rcvmsg[11:]
+			} else if rcvmsg[:6] == "Queue:" {
+
+			} else if rcvmsg[:12] == "Controleurs:" {
+				controllerNames = strings.Split(rcvmsg[12:], ",")
+			}
 			// Le message vient de mon controleur
 			a := make([]int, 2)
 			a[0] = MyId
