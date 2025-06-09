@@ -27,6 +27,7 @@ const (
 	MsgPath        = "pth"
 	MsgType        = "typ"
 	electionInit   = "eli"
+	election       = "elec"
 	controleur     = "ctr"
 	admission      = "adm"
 	admResponse    = "res"
@@ -44,8 +45,9 @@ var (
 	ListVoisins     []int
 	blockchainData  = ""
 	queueData       = ""
-	controllerNames = []string{}
+	controllerNames string
 	ListEnfants     []int
+	waitingSite     int
 )
 
 func MsgFormat(key string, val string) string {
@@ -79,47 +81,47 @@ func demanderAdmission() {
 	for {
 		fmt.Scanln(&received)
 		if findval(received, MsgCategory) == admResponse {
+			// J'ajoute mon voisin comme parent
+			parent, _ = strconv.Atoi(findval(received, MsgSender))
 
-			//On récupère les données de la aprt du parent
+			//On récupère les données de la part du parent
 			blockchainData = findval(received, "blockchain")
-			NbSites, _ = strconv.Atoi(findval(received, "nbSites"))
+			NbSites, _ = strconv.Atoi(findval(received, nombreSites))
 			queueData = findval(received, "queue")
-			controllerNames = strings.Split(findval(received, "controllerNames"), ",")
+			controllerNames = findval(received, "controllerNames")
 
 			//On dit au controller de lancer son initialisation
 			fmt.Printf("NET:start:%d\n", NbSites)
 
 			//On envoie les données nécessaires à l'initialisation du contrôleur
-			fmt.Printf("NET:blockchain:%s\n", blockchainData)
+			fmt.Printf("NET:controleur:%s\n", controllerNames)
 			fmt.Printf("NET:queue:%s\n", queueData)
-			for _, name := range controllerNames {
-				fmt.Printf("NET:controller:%s\n", name)
-			}
+			fmt.Printf("NET:blockchain:%s\n", blockchainData)
 
 			break
 		}
 	}
 }
 
-func traiterMessageAdmission(rcvmsg string) {
-	senderID, _ := strconv.Atoi(findval(rcvmsg, MsgSender))
+func finaliserAdmission(senderID int) {
 
-	DemarrerElection()
+	//On ajoute le demandeur au parent en tant qu'enfant
+	ListEnfants = append(ListEnfants, senderID)
+	ListVoisins = append(ListVoisins, senderID)
+	NbSites++
+	NbVoisins++
+	//On envoie au nouveau site les infos nécessaires à son initialisation
+	infos := MsgFormat(MsgSender, strconv.Itoa(MyId)) +
+		MsgFormat(MsgCategory, admResponse) +
+		MsgFormat("blockchain", blockchainData) +
+		MsgFormat("queue", queueData) +
+		MsgFormat("controllerNames", controllerNames)
+	MsgFormat(nombreSites, strconv.Itoa(NbSites))
+	fmt.Println(infos)
 
-	//Si j'ai gagné l'election ou si je suis la racine, alors je deviens le parent du demandeur
-	if win || parent == MyId {
-		//On ajoute le demandeur au parent en tant qu'enfant
-		ListEnfants = append(ListEnfants, senderID)
+	// Réinitialisation des variables pour la prochaine élection
+	resetElection()
 
-		//On envoie au nouveau site les infos nécessaires à son initialisation
-		infos := MsgFormat(MsgSender, strconv.Itoa(MyId)) +
-			MsgFormat(MsgCategory, admResponse) +
-			MsgFormat(MsgDestination, strconv.Itoa(MyId)) +
-			MsgFormat("blockchain", blockchainData) +
-			MsgFormat("queue", queueData) +
-			MsgFormat("controllerNames", strings.Join(controllerNames, ","))
-		fmt.Println(infos)
-	}
 }
 
 func initialisation() {
@@ -141,7 +143,7 @@ func initialisation() {
 	}
 	NbVoisins = len(ListVoisins)
 	stderr.Println(Nom, "Fin des voisins", ListVoisins)
-	DemarrerElection()
+	DemarrerElectionInit()
 
 	// Tant que je n'ai pas gagné l'élection (je n'ai pas fini de compter le nb de sites)
 	for {
@@ -149,7 +151,7 @@ func initialisation() {
 		msgCat := findval(received, MsgCategory)
 		switch msgCat {
 		case electionInit:
-			recevoirMessageElection(received)
+			recevoirMessageElectionInit(received)
 			break
 		}
 		if NbSites != -1 {
@@ -159,10 +161,13 @@ func initialisation() {
 
 	if win {
 		// J'ai remporté l'élection, je transmets le nb de site à mes enfants
-		envoyerA(nombreSites, strconv.Itoa(NbSites), enfants)
+		envoyerA(electionInit, nombreSites, strconv.Itoa(NbSites), enfants)
 	}
 	stderr.Println(Nom, "Fin de l'initialisation")
 	fmt.Printf("NET:start:%d\n", NbSites)
+
+	// On réinitialise les variables (hors parent/enfants) pour la prochaine election (ajout/départ)
+	resetElection()
 }
 
 func majHistorique(msg string) string {
@@ -202,11 +207,22 @@ func main() {
 			sdrId, _ := strconv.Atoi(msgSdr)
 
 			if sdrId != parent && !slices.Contains(enfants, sdrId) {
-				// Si le message ne vient pas de mon parent ou de mes enfants, et que ce n'est pas une demande d'admission, je le rejette
-				if findval(rcvmsg, MsgCategory) != admission {
-					rcvmsg = ""
-					continue
+				// Si le message ne vient pas de mon parent ou de mes enfants,
+				//et que ce n'est pas une demande d'admission ou une election, je le rejette
+				switch rcvCat {
+				case admission:
+					DemarrerElection()
+					waitingSite = sdrId
+					break
+				case election:
+					recevoirMessageElection(rcvmsg)
+					if win {
+						finaliserAdmission(waitingSite)
+					}
+					break
 				}
+				rcvmsg = ""
+				continue
 			}
 
 			msgHist := findval(rcvmsg, MsgPath)
@@ -229,21 +245,29 @@ func main() {
 				fmt.Println(majHistorique(rcvmsg))
 				break
 
-			case admission:
-				traiterMessageAdmission(rcvmsg)
+			case admResponse:
+				// Je ne traite pas les réponses d'admission car je suis déjà démarré
+				break
 			}
 			rcvmsg = ""
 
 		} else {
-
-			if rcvmsg[:11] == "Blockchain:" {
-				blockchainData = rcvmsg[11:]
-			} else if rcvmsg[:6] == "Queue:" {
-
-			} else if rcvmsg[:12] == "Controleurs:" {
-				controllerNames = strings.Split(rcvmsg[12:], ",")
-			}
 			// Le message vient de mon controleur
+
+			if len(rcvmsg) > 11 && rcvmsg[:11] == "Blockchain:" {
+				blockchainData = rcvmsg[11:]
+				rcvmsg = ""
+				continue
+			} else if len(rcvmsg) > 6 && rcvmsg[:6] == "Queue:" {
+				queueData = rcvmsg[6:]
+				rcvmsg = ""
+				continue
+			} else if len(rcvmsg) > 12 && rcvmsg[:12] == "Controleurs:" {
+				controllerNames = rcvmsg[12:]
+				rcvmsg = ""
+				continue
+			}
+
 			a := make([]int, 2)
 			a[0] = MyId
 			a[1] = MyId
