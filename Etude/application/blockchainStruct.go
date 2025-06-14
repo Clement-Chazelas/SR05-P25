@@ -285,6 +285,10 @@ func CalculateUTXOs(utxos UTXOSet, transactions []Transaction) UTXOSet {
 	}
 	// Parcourt de la liste des transactions
 	for _, tx := range transactions {
+		// Si le receveur n'existe pas encore (nouveau site), on l'ajoute
+		if newUTXOs.FindByKey(tx.Receiver) == nil {
+			newUTXOs.Utxos = append(newUTXOs.Utxos, UTXO{tx.Receiver, 0})
+		}
 		// Le montant de la transaction est enlevé à l'expéditeur et ajouté au destinataire
 		newUTXOs.FindByKey(tx.Sender).Amount -= tx.Amount
 		newUTXOs.FindByKey(tx.Receiver).Amount += tx.Amount

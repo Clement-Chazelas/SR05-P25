@@ -70,7 +70,7 @@ var mutex = &sync.Mutex{}
 
 // sendInitialisation est la fonction d'écriture permettant de réaliser l'initialisation de l'application.
 // Elle consiste en l'échange des clés et des noms entre les différents sites, et l'initialisation du premier block.
-func sendInitialisation() {
+func sendInitialisation(stop chan struct{}, fin chan struct{}) {
 	// Indique si l'application a déjà envoyé sa clé aux autres sites.
 	isKeySent := false
 	for {
@@ -105,14 +105,14 @@ func sendInitialisation() {
 			mutex.Unlock()
 			stderr.Println(cyan, Nom, "Initialisation terminée", raz)
 			// Lancement de la goroutines d'écriture principale
-			go sendMain()
+			go sendMain(stop, fin)
 			break
 		} else if len(blockChain.Chain) > 0 {
 			// Je ne suis pas l'initiateur, j'attends le premier bloc de la blockchain
 
 			stderr.Println(cyan, Nom, "Initialisation terminée", raz)
 			// Lancement de la goroutines d'écriture principale
-			go sendMain()
+			go sendMain(stop, fin)
 			break
 		}
 
@@ -120,103 +120,170 @@ func sendInitialisation() {
 	}
 }
 
-func sendInitialisationNouveauSite() {
-	isKeySent := false
+func sendInitialisationNouveauSite(stop chan struct{}, fin chan struct{}) {
+	var rcvmsg string
+
 	for {
-		// Je n'ai pas envoyé ma clé
-		if !isKeySent {
-			mutex.Lock()
+		fmt.Scanln(&rcvmsg)
 
-			stderr.Println(Nom, "J'envoie ma clé aux autres sites")
-			// Envoi de la clé et du nom du site avec le préfixe "K:"
-			fmt.Printf("%sK:%s%s\n", prefix, Nom, SendPublicKey(&sitePubKey))
-
-			mutex.Unlock()
-			isKeySent = true
-			time.Sleep(time.Duration(1) * time.Second)
+		if rcvmsg[:5] != "CONT:" {
+			rcvmsg = ""
+			continue
 		}
 
-		var rcvmsg string
-
-		for {
-			fmt.Scanln(&rcvmsg)
-
-			if rcvmsg[:5] != "CONT:" {
-				rcvmsg = ""
-				continue
-			}
-
-			rcvmsg = rcvmsg[5:]
-			if rcvmsg[:11] == "blockchain:" {
-				rcvBlockchain := ReceiveBlockchain(rcvmsg[11:])
-				blockChain = rcvBlockchain.ToBlockchain()
-				break
-			}
+		rcvmsg = rcvmsg[5:]
+		if rcvmsg[:11] == "blockchain:" {
+			rcvBlockchain := ReceiveBlockchain(rcvmsg[11:])
+			blockChain = rcvBlockchain.ToBlockchain()
+			stderr.Println(Nom, "Initalisation terminée")
+			break
 		}
-
 	}
+
+	stderr.Println(Nom, "J'envoie ma clé aux autres sites")
+	// Envoi de la clé et du nom du site avec le préfixe "K:"
+	fmt.Printf("%sK:%s%s\n", prefix, Nom, SendPublicKey(&sitePubKey))
+
+	time.Sleep(time.Duration(1) * time.Second)
+
+	go sendMain(stop, fin)
+	go receive(stop)
+
 }
 
 // sendMain est la fonction d'écriture principale de l'application.
 // Elle mine un block lorsque c'est possible, et envoie une transaction sinon.
 // L'accès en écriture à la blockchain respecte l'algorithme de la file d'attente répartie.
 // Les transactions sont envoyées à intervalle aléatoire de temps compris entre 1 et 10 secondes.
-func sendMain() {
+func sendMain(stop chan struct{}, fin chan struct{}) {
 	// Booléen indiquant si l'application a réalisé une demande d'accès à la section critique
 	isSCAsked := false
 	for {
-		// Si la liste des transactions en attente est non vide
-		if len(pendingTransactions) > 0 {
+		select {
 
-			if allowSC {
-				// J'ai l'autorisation d'accès à la section critique
-				mutex.Lock()
+		case <-stop:
+			close(fin)
+			return
 
-				stderr.Println()
-				stderr.Println(vert, Nom, "J'entre dans la section critique", raz)
+		default:
+			// Si la liste des transactions en attente est non vide
+			if len(pendingTransactions) > 0 {
 
-				stdverb.Println(Nom, "Initialisation d'un nouveau bloc")
-				stderr.Printf(" %s%s Ajout des transactions : %sau bloc%s\n", cyan, Nom, printTransactionsId(pendingTransactions), raz)
+				if allowSC {
+					// J'ai l'autorisation d'accès à la section critique
+					mutex.Lock()
 
-				newBlock := InitBlock(pendingTransactions, blockChain.GetLastBlock().Hash, blockChain.GetLastBlock().UTXOs)
-				newBlock.MineBlock()
-				blockChain.AddBlock(newBlock)
-				//Envoi du block miné aux autres sites
-				fmt.Printf("%sB:%s\n", prefix, SendBlock(blockChain.GetLastBlock()))
-				//Envoi de la nouvelle blockchain au contrôleur pour save l'état local
-				fmt.Printf("%sSNAP:%s\n", prefix, SendBlockchain(blockChain))
+					stderr.Println()
+					stderr.Println(vert, Nom, "J'entre dans la section critique", raz)
 
-				allowSC = false
-				isSCAsked = false
-				fmt.Printf("%sFILE:finSC\n", prefix)
-				stderr.Println(noir, Nom, "Fin de Section critique", raz)
-				stderr.Println()
+					stdverb.Println(Nom, "Initialisation d'un nouveau bloc")
+					maxTransac := len(pendingTransactions)
+					if maxTransac > 4 {
+						maxTransac = 4
+					}
+					stderr.Printf(" %s%s Ajout des transactions : %sau bloc%s\n", cyan, Nom, printTransactionsId(pendingTransactions[:maxTransac]), raz)
 
-				mutex.Unlock()
-				pendingTransactions = []Transaction{}
+					newBlock := InitBlock(pendingTransactions[:maxTransac], blockChain.GetLastBlock().Hash, blockChain.GetLastBlock().UTXOs)
+					newBlock.MineBlock()
+					blockChain.AddBlock(newBlock)
+					//Envoi du block miné aux autres sites
+					fmt.Printf("%sB:%s\n", prefix, SendBlock(blockChain.GetLastBlock()))
+					//Envoi de la nouvelle blockchain au contrôleur pour save l'état local
+					fmt.Printf("%sSNAP:%s\n", prefix, SendBlockchain(blockChain))
 
-				time.Sleep(time.Duration(2) * time.Second)
-			} else if !isSCAsked {
-				// Je n'ai pas accès à la section critique, je demande l'autorisation (une unique fois)
-				fmt.Printf("%sFILE:demandeSC\n", prefix)
-				isSCAsked = true
-				stderr.Println(orange, Nom, "Demande Section critique", raz)
-				time.Sleep(time.Duration(2) * time.Second)
+					allowSC = false
+					isSCAsked = false
+					fmt.Printf("%sFILE:finSC\n", prefix)
+					stderr.Println(noir, Nom, "Fin de Section critique", raz)
+					stderr.Println()
+
+					mutex.Unlock()
+					pendingTransactions = pendingTransactions[maxTransac:]
+
+					time.Sleep(time.Duration(2) * time.Second)
+				} else if !isSCAsked {
+					// Je n'ai pas accès à la section critique, je demande l'autorisation (une unique fois)
+					mutex.Lock()
+					fmt.Printf("%sFILE:demandeSC\n", prefix)
+					isSCAsked = true
+					stderr.Println(orange, Nom, "Demande Section critique", raz)
+					mutex.Unlock()
+					time.Sleep(time.Duration(2) * time.Second)
+
+				} else {
+					// En attendant l'autorisation d'accès à la section critique, j'envoie une transaction
+					mutex.Lock()
+
+					// Je ne connais personne, je ne génère pas de transaction
+					if len(adressOfSites) == 0 {
+						mutex.Unlock()
+						time.Sleep(time.Duration(1) * time.Second)
+						continue
+					}
+
+					if blockChain.GetLastBlock().UTXOs.FindByKey(sitePubKey) == nil ||
+						blockChain.GetLastBlock().UTXOs.FindByKey(sitePubKey).Amount < 10 {
+						mutex.Unlock()
+						time.Sleep(time.Duration(1) * time.Second)
+						continue
+					}
+
+					// Montant et déstinataire choisi aléatoirement
+					amount := mrand.Intn(10) + 1
+
+					index := mrand.Intn(len(adressOfSites))
+
+					//Initialisation de la transaction et signature
+					newTransaction := InitTransaction(sitePubKey, adressOfSites[index], amount)
+					newTransaction.Sign(sitePrivKey)
+
+					//Envoi de la transaction avec le préfixe "T:"
+					fmt.Printf("%sT:%s\n", prefix, SendTransaction(&newTransaction))
+
+					mutex.Unlock()
+
+					stderr.Printf("%s %s Nouvelle transaction de %d coins envoyée à %s ; ID=%d %s", blanc, Nom, amount, nameOfSites[index], newTransaction.Id, raz)
+					time.Sleep(time.Duration(amount+5) * time.Second)
+				}
 
 			} else {
-				// En attendant l'autorisation d'accès à la section critique, j'envoie une transaction
+				// Je n'ai pas de transactions en attente, donc création et envoi d'une transaction
 				mutex.Lock()
+
+				if allowSC {
+					//La section critique avait été demandé, mais mes transactions en attentes ont déjà été minées par un autre site
+					stderr.Println()
+					stderr.Println(vert, Nom, "J'entre dans la section critique", raz)
+
+					// Réinitialisation des booléens de sections critiques
+					allowSC = false
+					isSCAsked = false
+
+					// Envoi au controleur d'un message indiquant la fin de l'accès à la section critique
+					fmt.Printf("%sFILE:finSC\n", prefix)
+
+					stderr.Println(rouge, Nom, "Je n'ai pas de transaction en attente", raz)
+					stderr.Println(noir, Nom, "Fin de Section critique", raz)
+					stderr.Println()
+				}
 
 				// Je ne connais personne, je ne génère pas de transaction
 				if len(adressOfSites) == 0 {
-					time.Sleep(time.Duration(1) * time.Second)
 					mutex.Unlock()
+					time.Sleep(time.Duration(1) * time.Second)
+
+					continue
+				}
+
+				if blockChain.GetLastBlock().UTXOs.FindByKey(sitePubKey) == nil ||
+					blockChain.GetLastBlock().UTXOs.FindByKey(sitePubKey).Amount < 10 {
+					mutex.Unlock()
+					time.Sleep(time.Duration(1) * time.Second)
 					continue
 				}
 
 				// Montant et déstinataire choisi aléatoirement
 				amount := mrand.Intn(10) + 1
-
 				index := mrand.Intn(len(adressOfSites))
 
 				//Initialisation de la transaction et signature
@@ -229,53 +296,8 @@ func sendMain() {
 				mutex.Unlock()
 
 				stderr.Printf("%s %s Nouvelle transaction de %d coins envoyée à %s ; ID=%d %s", blanc, Nom, amount, nameOfSites[index], newTransaction.Id, raz)
-				time.Sleep(time.Duration(amount) * time.Second)
+				time.Sleep(time.Duration(amount+5) * time.Second)
 			}
-
-		} else {
-			// Je n'ai pas de transactions en attente, donc création et envoi d'une transaction
-
-			if allowSC {
-				//La section critique avait été demandé, mais mes transactions en attentes ont déjà été minées par un autre site
-				stderr.Println()
-				stderr.Println(vert, Nom, "J'entre dans la section critique", raz)
-
-				// Réinitialisation des booléens de sections critiques
-				allowSC = false
-				isSCAsked = false
-
-				// Envoi au controleur d'un message indiquant la fin de l'accès à la section critique
-				fmt.Printf("%sFILE:finSC\n", prefix)
-
-				stderr.Println(rouge, Nom, "Je n'ai pas de transaction en attente", raz)
-				stderr.Println(noir, Nom, "Fin de Section critique", raz)
-				stderr.Println()
-			}
-
-			mutex.Lock()
-
-			// Je ne connais personne, je ne génère pas de transaction
-			if len(adressOfSites) == 0 {
-				time.Sleep(time.Duration(1) * time.Second)
-				mutex.Unlock()
-				continue
-			}
-
-			// Montant et déstinataire choisi aléatoirement
-			amount := mrand.Intn(10) + 1
-			index := mrand.Intn(len(adressOfSites))
-
-			//Initialisation de la transaction et signature
-			newTransaction := InitTransaction(sitePubKey, adressOfSites[index], amount)
-			newTransaction.Sign(sitePrivKey)
-
-			//Envoi de la transaction avec le préfixe "T:"
-			fmt.Printf("%sT:%s\n", prefix, SendTransaction(&newTransaction))
-
-			mutex.Unlock()
-
-			stderr.Printf("%s %s Nouvelle transaction de %d coins envoyée à %s ; ID=%d %s", blanc, Nom, amount, nameOfSites[index], newTransaction.Id, raz)
-			time.Sleep(time.Duration(amount) * time.Second)
 		}
 	}
 
@@ -283,12 +305,19 @@ func sendMain() {
 
 // receive est la fonction de lecture de l'application.
 // Elle reçoit les messages, les analyse et réalise les actions nécessaires.
-func receive(fin chan bool) {
+func receive(stop chan struct{}) {
 	var rcvmsg string
 
 	for {
 		fmt.Scanln(&rcvmsg)
 		mutex.Lock()
+
+		if rcvmsg == "fin" {
+			mutex.Unlock()
+			stderr.Println(Nom, "Signal de fin reçu")
+			close(stop)
+			return
+		}
 
 		// Le message ne débute pas par "CONT:"
 		if rcvmsg[:5] != "CONT:" {
@@ -315,6 +344,12 @@ func receive(fin chan bool) {
 			stdverb.Println(Nom, "J'ai reçu", len(adressOfSites), "clé(s)")
 
 		} else if rcvmsg[:2] == "T:" {
+			if len(blockChain.Chain) == 0 {
+				stderr.Println(Nom, "Transaction alors que chaine vide", rcvmsg)
+				mutex.Unlock()
+				rcvmsg = ""
+				continue
+			}
 			// Le message reçu est une transaction
 			stdverb.Println(Nom, "Nouvelle transaction reçu")
 
@@ -373,11 +408,13 @@ func receive(fin chan bool) {
 func main() {
 	var rcvmsg string
 	// Canal indiquant la fin des goroutines (non implémenté)
-	var fin chan bool
+	stop := make(chan struct{})
+	fin := make(chan struct{})
+	var b chan bool
 
 	// Récupération du nom donnée par l'utilisateur et du mode verbose.
 	pNom := flag.String("n", "app", "Nom")
-	pNouveauSite := flag.Bool("nouveauSite", false, "Nouveau site")
+	pNouveauSite := flag.Bool("new", false, "Nouveau site")
 	flag.BoolVar(&verbose, "v", false, "Activer le mode verbose")
 	flag.Parse()
 
@@ -405,14 +442,24 @@ func main() {
 
 	// Démarrage des goroutines de lecture et d'écriture.
 	if *pNouveauSite {
-		go sendInitialisationNouveauSite()
+		go sendInitialisationNouveauSite(stop, fin)
 	} else {
-		go sendInitialisation()
+		go receive(stop)
+		go sendInitialisation(stop, fin)
 	}
-
-	go receive(fin)
 
 	// Attente bloquante de la fin des goroutines
 	<-fin
+	stderr.Println("\n", rouge, Nom, "Fin de l'application", raz)
+	fmt.Println("fin")
 
+	go func() {
+		for {
+			a := 1
+			sleeptime := time.Duration(a) * time.Second
+			a++
+			time.Sleep(sleeptime)
+		}
+	}()
+	<-b
 }
