@@ -12,7 +12,7 @@ var (
 
 func DemarrerElection() {
 	if parentTmp == 0 {
-		stderr.Println(Nom, "Je démarre mon elec")
+		stderr.Println(blanc, "["+Nom+"]", "Je démarre une election", raz)
 		elu = MyId
 		parentTmp = MyId
 		nbVoisinsAttendus = NbVoisins
@@ -24,7 +24,7 @@ func RecevoirMessageBleu(msg string) {
 	k, _ := strconv.Atoi(findval(msg, MsgData))
 	senderId, _ := strconv.Atoi(findval(msg, MsgSender))
 	if k < elu {
-		stderr.Println(Nom, "Je change de vague pour", k)
+		stderr.Println(noir, "["+Nom+"]", "Je change de vague pour", k, raz)
 		elu = k
 		parentTmp = senderId
 		nbVoisinsAttendus = NbVoisins - 1
@@ -46,16 +46,14 @@ func RecevoirMessageRouge(msg string) {
 	if elu == k {
 
 		nbVoisinsAttendus--
-		stderr.Println(Nom, "Je reduit mon nombre de voisins", nbVoisinsAttendus)
 		if nbVoisinsAttendus == 0 {
 			if elu == MyId {
 				win = true
-				stderr.Println(Nom, "J'ai gagné", NbSites)
+				stderr.Println(orange, "["+Nom+"]", "J'ai gagné", raz)
 			} else {
 				// j'envoie rouge à mon parent
 				destinataire := []int{parentTmp}
 				envoyerA(election, rouge, strconv.Itoa(elu), destinataire)
-				resetElection()
 			}
 		}
 	}
@@ -63,12 +61,10 @@ func RecevoirMessageRouge(msg string) {
 
 func recevoirMessageElection(msg string) {
 	destinataires := findval(msg, MsgDestination)
-
 	if destinataires != "" && !slices.Contains(strToIntTab(destinataires), MyId) {
 		// Ce message ne m'était pas déstiné
 		return
 	}
-	stderr.Println(Nom, "recevoir", msg)
 	switch findval(msg, MsgType) {
 	case bleu:
 		RecevoirMessageBleu(msg)

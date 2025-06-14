@@ -5,18 +5,25 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 var fieldsep = "?"
 var keyvalsep = "@"
 
-var red string = "\033[1;31m"
-var orange string = "\033[1;33m"
+// Listes des couleurs pour l'affichage dans la console
+var noir string = "\033[1;30m"
+var rougec string = "\033[1;31m"
 var vert string = "\033[1;32m"
+var orange string = "\033[1;33m"
+var magenta string = "\033[1;35m"
+var cyan string = "\033[1;36m"
+var blanc string = "\033[1;37m"
 var raz string = "\033[0;00m"
 
 const (
@@ -31,6 +38,8 @@ const (
 	controleur     = "ctr"
 	admission      = "adm"
 	admResponse    = "res"
+	admConfirm     = "admcf"
+	outConfirm     = "outcf"
 )
 
 var (
@@ -48,7 +57,11 @@ var (
 	controllerNames string
 	ListEnfants     []int
 	waitingSite     int
+	elecDisabled    bool = false
+	end             bool = false
 )
+
+var mutex = &sync.Mutex{}
 
 func MsgFormat(key string, val string) string {
 	return fieldsep + keyvalsep + key + keyvalsep + val
@@ -72,17 +85,19 @@ func findval(msg string, key string) string {
 }
 
 func demanderAdmission() {
+	stderr.Println(vert, "\n["+Nom+"]", "Demande d'admission", raz)
 	msg := MsgFormat(MsgSender, strconv.Itoa(MyId)) +
 		MsgFormat(MsgCategory, admission)
 	fmt.Println(msg)
 
 	var received string
-
+	heureDebut := time.Now()
 	for {
 		fmt.Scanln(&received)
 		if findval(received, MsgCategory) == admResponse {
 			// J'ajoute mon voisin comme parent
 			parent, _ = strconv.Atoi(findval(received, MsgSender))
+			NbVoisins = 1
 
 			//On récupère les données de la part du parent
 			blockchainData = findval(received, "blockchain")
@@ -92,21 +107,28 @@ func demanderAdmission() {
 
 			//On dit au controller de lancer son initialisation
 			fmt.Printf("NET:start:%d\n", NbSites)
-
+			stderr.Println(vert, "["+Nom+"]", "Données reçues", raz)
 			//On envoie les données nécessaires à l'initialisation du contrôleur
 			fmt.Printf("NET:controleur:%s\n", controllerNames)
 			fmt.Printf("NET:queue:%s\n", queueData)
 			fmt.Printf("NET:blockchain:%s\n", blockchainData)
 
+			// Election désactivée tant que le controleur n'a pas fini son init
+			elecDisabled = true
+
 			break
+		}
+		if time.Since(heureDebut) > 5*time.Second {
+			fmt.Println(msg)
+			heureDebut = time.Now()
 		}
 	}
 }
 
 func finaliserAdmission(senderID int) {
-
+	stderr.Println(magenta, "["+Nom+"]", "Finalisation d'admission", raz)
 	//On ajoute le demandeur au parent en tant qu'enfant
-	ListEnfants = append(ListEnfants, senderID)
+	enfants = append(enfants, senderID)
 	ListVoisins = append(ListVoisins, senderID)
 	NbSites++
 	NbVoisins++
@@ -115,54 +137,42 @@ func finaliserAdmission(senderID int) {
 		MsgFormat(MsgCategory, admResponse) +
 		MsgFormat("blockchain", blockchainData) +
 		MsgFormat("queue", queueData) +
-		MsgFormat("controllerNames", controllerNames)
-	MsgFormat(nombreSites, strconv.Itoa(NbSites))
+		MsgFormat("controllerNames", controllerNames) +
+		MsgFormat(nombreSites, strconv.Itoa(NbSites))
 	fmt.Println(infos)
 
 	// Réinitialisation des variables pour la prochaine élection
 	resetElection()
 
+	// Envoi du nv nb de site
+	msg := MsgFormat(MsgSender, strconv.Itoa(MyId)) + MsgFormat(MsgCategory, admConfirm) +
+		MsgFormat(MsgPath, intTabToStr([]int{MyId, MyId})) +
+		MsgFormat(MsgData, strconv.Itoa(NbSites))
+
+	fmt.Println(msg)
 }
 
 func initialisation() {
+	var endInit = make(chan bool)
 	stderr.Println(Nom, "Initialisation")
+
 	fmt.Println(MyId)
+	go receiveInit(endInit)
 
-	// Lecture des autres NET pour initialisation
-	var received string
-	heureDebut := time.Now()
-	for time.Since(heureDebut) < 2*time.Second {
-		fmt.Scanln(&received)
-		idVoisin, err := strconv.Atoi(received)
-		if err != nil {
-			continue
-		}
-		stderr.Println(Nom, "recu", received)
-		ListVoisins = append(ListVoisins, idVoisin)
-		received = ""
-	}
+	// Délai d'attente de découverte des voisins
+	time.Sleep(time.Duration(2) * time.Second)
+
+	mutex.Lock()
 	NbVoisins = len(ListVoisins)
-	stderr.Println(Nom, "Fin des voisins", ListVoisins)
+	mutex.Unlock()
+
+	//stderr.Println(Nom, "Fin des voisins", ListVoisins)
+
+	mutex.Lock()
 	DemarrerElectionInit()
+	mutex.Unlock()
 
-	// Tant que je n'ai pas gagné l'élection (je n'ai pas fini de compter le nb de sites)
-	for {
-		fmt.Scanln(&received)
-		msgCat := findval(received, MsgCategory)
-		switch msgCat {
-		case electionInit:
-			recevoirMessageElectionInit(received)
-			break
-		}
-		if NbSites != -1 {
-			break
-		}
-	}
-
-	if win {
-		// J'ai remporté l'élection, je transmets le nb de site à mes enfants
-		envoyerA(electionInit, nombreSites, strconv.Itoa(NbSites), enfants)
-	}
+	<-endInit
 	stderr.Println(Nom, "Fin de l'initialisation")
 	fmt.Printf("NET:start:%d\n", NbSites)
 
@@ -170,12 +180,54 @@ func initialisation() {
 	resetElection()
 }
 
+func receiveInit(end chan bool) {
+	var received string
+	for {
+		fmt.Scanln(&received)
+		mutex.Lock()
+		msgCat := findval(received, MsgCategory)
+		switch msgCat {
+		case electionInit:
+			// Je ne traite pas le message d'election tant que je n'ai pas fini de compter mes voisins
+			for NbVoisins == 0 {
+				mutex.Unlock()
+				time.Sleep(time.Duration(100) * time.Millisecond)
+				mutex.Lock()
+			}
+			recevoirMessageElectionInit(received)
+			break
+
+		default:
+			idVoisin, err := strconv.Atoi(received)
+			if err != nil {
+				continue
+			}
+			ListVoisins = append(ListVoisins, idVoisin)
+			break
+		}
+		mutex.Unlock()
+		if NbSites != -1 {
+			break
+		}
+		received = ""
+	}
+	if win {
+		// J'ai remporté l'élection, je transmets le nb de site à mes enfants
+		envoyerA(electionInit, nombreSites, strconv.Itoa(NbSites), enfants)
+	}
+	end <- true
+}
+
 func majHistorique(msg string) string {
 	hist := strToIntTab(findval(msg, MsgPath))
+	if len(hist) == 1 {
+		stderr.Println(Nom, "Erreur, historique vide", hist)
+		stderr.Println(Nom, msg)
+	}
 	hist[0] = hist[1]
 	hist[1] = MyId
 	newMsg := MsgFormat(MsgSender, strconv.Itoa(MyId)) + MsgFormat(MsgCategory, findval(msg, MsgCategory)) +
-		MsgFormat(MsgData, findval(msg, MsgData)) + MsgFormat(MsgPath, intTabToStr(hist))
+		MsgFormat(MsgPath, intTabToStr(hist)) + MsgFormat(MsgData, findval(msg, MsgData))
 	return newMsg
 }
 
@@ -185,14 +237,27 @@ func main() {
 
 	//On check si c'est un nouveau site ou pas, si oui on demande l'admission, si non alors on s'initialise normalement
 	if *pNouveauSite {
+		time.Sleep(time.Duration(500) * time.Millisecond)
 		demanderAdmission()
 	} else {
 		initialisation()
 	}
 
 	var rcvmsg string
-	for {
+	var fin bool = false
+	for !fin {
 		fmt.Scanln(&rcvmsg)
+
+		if len(rcvmsg) < 5 {
+			if rcvmsg == "fin" {
+				DemarrerElection()
+				end = true
+				continue
+			}
+			stderr.Println(Nom, "message trop court : "+rcvmsg)
+			continue
+		}
+
 		if rcvmsg[:5] == "CONT:" || rcvmsg[:4] == "NET:" {
 			//Ce message n'était pas à destination du NET
 			rcvmsg = ""
@@ -202,29 +267,69 @@ func main() {
 		// Traitement des messages
 		rcvCat := findval(rcvmsg, MsgCategory)
 		if rcvCat != "" {
+
 			// Le message vient d'un autre NET
 			msgSdr := findval(rcvmsg, MsgSender)
 			sdrId, _ := strconv.Atoi(msgSdr)
-
 			if sdrId != parent && !slices.Contains(enfants, sdrId) {
 				// Si le message ne vient pas de mon parent ou de mes enfants,
 				//et que ce n'est pas une demande d'admission ou une election, je le rejette
 				switch rcvCat {
 				case admission:
+					stderr.Println(orange, "["+Nom+"]", "admission reçu, tentative election", raz)
 					DemarrerElection()
 					waitingSite = sdrId
 					break
 				case election:
-					recevoirMessageElection(rcvmsg)
-					if win {
+					if !elecDisabled {
+						recevoirMessageElection(rcvmsg)
+					}
+					if win && end {
+						fin = true
+						var args []string
+						// Si je ne suis pas la racine de l'arbre
+						if parent != MyId {
+							newMsg := MsgFormat(MsgSender, strconv.Itoa(MyId)) + MsgFormat(MsgCategory, outConfirm) +
+								MsgFormat(MsgPath, intTabToStr([]int{MyId, MyId})) +
+								MsgFormat("children", intTabToStr(enfants)) + MsgFormat("parent", strconv.Itoa(parent)) +
+								MsgFormat(MsgData, strconv.Itoa(MyId))
+							fmt.Println(newMsg)
+
+							args = []string{strconv.Itoa(parent)}
+							for _, v := range enfants {
+								args = append(args, strconv.Itoa(v))
+							}
+
+						} else {
+							// Je suis la racine de l'arbre, la nouvelle racine est mon premier enfant
+							newMsg := MsgFormat(MsgSender, strconv.Itoa(MyId)) + MsgFormat(MsgCategory, outConfirm) +
+								MsgFormat(MsgPath, intTabToStr([]int{MyId, MyId})) +
+								MsgFormat("children", intTabToStr(enfants)) + MsgFormat("parent", strconv.Itoa(enfants[0])) +
+								MsgFormat(MsgData, strconv.Itoa(MyId))
+							fmt.Println(newMsg)
+
+							args = []string{strconv.Itoa(enfants[0])}
+							for _, v := range enfants[1:] {
+								args = append(args, strconv.Itoa(v))
+							}
+						}
+						cmd := exec.Command("./quit.sh", args...)
+
+						cmd.Stdout = os.Stderr
+						cmd.Stderr = os.Stderr
+
+						// Exécute le script Bash
+						cmd.Run()
+
+					} else if win {
 						finaliserAdmission(waitingSite)
 					}
 					break
 				}
+
 				rcvmsg = ""
 				continue
 			}
-
 			msgHist := findval(rcvmsg, MsgPath)
 			hist := strToIntTab(msgHist)
 
@@ -236,8 +341,8 @@ func main() {
 
 			switch rcvCat {
 			case controleur:
-
 				rcvData := findval(rcvmsg, MsgData)
+
 				//Envoi de la donnée reçue au controleur avec le préfixe "NET:"
 				fmt.Printf("NET:%s\n", rcvData)
 
@@ -245,10 +350,121 @@ func main() {
 				fmt.Println(majHistorique(rcvmsg))
 				break
 
-			case admResponse:
-				// Je ne traite pas les réponses d'admission car je suis déjà démarré
+			case election:
+				if !elecDisabled {
+					recevoirMessageElection(rcvmsg)
+				}
+				if win && end {
+					fin = true
+					var args []string
+					// Si je ne suis pas la racine de l'arbre
+					if parent != MyId {
+						newMsg := MsgFormat(MsgSender, strconv.Itoa(MyId)) + MsgFormat(MsgCategory, outConfirm) +
+							MsgFormat(MsgPath, intTabToStr([]int{MyId, MyId})) +
+							MsgFormat("children", intTabToStr(enfants)) + MsgFormat("parent", strconv.Itoa(parent)) +
+							MsgFormat(MsgData, strconv.Itoa(MyId))
+						fmt.Println(newMsg)
+
+						args = []string{strconv.Itoa(parent)}
+						for _, v := range enfants {
+							args = append(args, strconv.Itoa(v))
+						}
+
+					} else {
+						// Je suis la racine de l'arbre, la nouvelle racine est mon premier enfant
+						newMsg := MsgFormat(MsgSender, strconv.Itoa(MyId)) + MsgFormat(MsgCategory, outConfirm) +
+							MsgFormat(MsgPath, intTabToStr([]int{MyId, MyId})) +
+							MsgFormat("children", intTabToStr(enfants[1:])) + MsgFormat("parent", strconv.Itoa(enfants[0])) +
+							MsgFormat(MsgData, strconv.Itoa(MyId))
+						fmt.Println(newMsg)
+
+						args = []string{strconv.Itoa(enfants[0])}
+						for _, v := range enfants[1:] {
+							args = append(args, strconv.Itoa(v))
+						}
+					}
+
+					time.Sleep(time.Duration(1) * time.Second)
+					cmd := exec.Command("./quit.sh", args...)
+
+					cmd.Stdout = os.Stderr
+					cmd.Stderr = os.Stderr
+
+					// Exécute le script Bash
+					cmd.Run()
+
+				} else if win {
+					finaliserAdmission(waitingSite)
+				}
+				break
+
+			case admConfirm:
+				NbSites, _ = strconv.Atoi(findval(rcvmsg, MsgData))
+				fmt.Println(majHistorique(rcvmsg))
+				stderr.Println(blanc, "["+Nom+"]", "Fin de l'admission, nouveau nombre de sites :", NbSites, raz)
+				resetElection()
+				break
+
+			case outConfirm:
+				NbSites--
+				stderr.Println(blanc, "["+Nom+"]", "Départ confirmé, nouveau nombre de sites :", NbSites, raz)
+				idQuit, _ := strconv.Atoi(findval(rcvmsg, MsgData))
+				if idQuit == parent {
+					parent, _ = strconv.Atoi(findval(rcvmsg, "parent"))
+
+					if parent != MyId {
+						ListVoisins = append(ListVoisins, parent)
+
+						quitIndex := slices.Index(ListVoisins, idQuit)
+						ListVoisins = append(ListVoisins[:quitIndex], ListVoisins[quitIndex+1:]...)
+
+						stderr.Println(magenta, "["+Nom+"]", "Nouveau Parent", parent, raz)
+
+					} else {
+
+						sdrChild := strToIntTab(findval(rcvmsg, "children"))
+						// Je suis la nouvelle racine de l'arbre
+						if len(sdrChild) > 0 {
+							enfants = append(enfants, sdrChild...)
+							ListVoisins = append(ListVoisins, sdrChild...)
+
+						}
+
+						quitIndex := slices.Index(ListVoisins, idQuit)
+						ListVoisins = append(ListVoisins[:quitIndex], ListVoisins[quitIndex+1:]...)
+
+						stderr.Println(magenta, "["+Nom+"]", "Nouveaux enfants", enfants, raz)
+
+						NbVoisins += len(sdrChild) - 1
+					}
+				} else if slices.Contains(enfants, idQuit) {
+					sdrChild := strToIntTab(findval(rcvmsg, "children"))
+					if len(sdrChild) > 0 {
+						enfants = append(enfants, sdrChild...)
+						ListVoisins = append(ListVoisins, sdrChild...)
+
+						quitIndex := slices.Index(enfants, idQuit)
+						enfants = append(enfants[:quitIndex], enfants[quitIndex+1:]...)
+					}
+					stderr.Println(magenta, "["+Nom+"]", "Nouveaux enfants", enfants, raz)
+
+					quitIndex := slices.Index(ListVoisins, idQuit)
+					ListVoisins = append(ListVoisins[:quitIndex], ListVoisins[quitIndex+1:]...)
+
+					NbVoisins += len(sdrChild) - 1
+				} else if slices.Contains(ListVoisins, idQuit) {
+					NbVoisins--
+					quitIndex := slices.Index(ListVoisins, idQuit)
+					ListVoisins = append(ListVoisins[:quitIndex], ListVoisins[quitIndex+1:]...)
+				}
+				fmt.Println(majHistorique(rcvmsg) + MsgFormat("parent", findval(rcvmsg, "parent")) +
+					MsgFormat("children", findval(rcvmsg, "children")))
+
+				time.Sleep(time.Duration(5) * time.Second)
+				resetElection()
 				break
 			}
+
 			rcvmsg = ""
 
 		} else {
@@ -266,8 +482,10 @@ func main() {
 				controllerNames = rcvmsg[12:]
 				rcvmsg = ""
 				continue
+			} else if rcvmsg == "FinInit" {
+				time.Sleep(time.Duration(100) * time.Millisecond)
+				elecDisabled = false
 			}
-
 			a := make([]int, 2)
 			a[0] = MyId
 			a[1] = MyId
@@ -278,5 +496,10 @@ func main() {
 			fmt.Println(newMessage)
 			rcvmsg = ""
 		}
+	}
+	stderr.Println(rougec, "["+Nom+"]", "Fin du NET", raz)
+	for {
+		fmt.Scanln(&rcvmsg)
+		rcvmsg = ""
 	}
 }

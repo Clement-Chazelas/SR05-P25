@@ -25,7 +25,7 @@ var (
 
 func DemarrerElectionInit() {
 	if parent == 0 {
-		stderr.Println(Nom, "Je démarre mon elec")
+		stderr.Println(blanc, "["+Nom+"]", "Je démarre une election", raz)
 		elu = MyId
 		parent = MyId
 		nbVoisinsAttendus = NbVoisins
@@ -37,7 +37,7 @@ func RecevoirMessageBleuInit(msg string) {
 	k, _ := strconv.Atoi(findval(msg, MsgData))
 	senderId, _ := strconv.Atoi(findval(msg, MsgSender))
 	if k < elu {
-		stderr.Println(Nom, "Je change de vague pour", k)
+		stderr.Println(noir, "["+Nom+"]", "Je change de vague pour", k, raz)
 		elu = k
 		parent = senderId
 		enfants = make([]int, 0)
@@ -48,6 +48,7 @@ func RecevoirMessageBleuInit(msg string) {
 		} else {
 			// j'envoie à mon parent mon nombre de descendants
 			envoyerAuParent(electionInit, rouge, strconv.Itoa(elu), nbDescendants)
+			stderr.Println(cyan, "["+Nom+"]", "Je n'ai pas d'enfant", raz)
 		}
 	} else if elu == k {
 		destinataire := []int{senderId}
@@ -67,16 +68,21 @@ func RecevoirMessageRougeInit(msg string) {
 			nbRecu, _ := strconv.Atoi(findval(msg, "enfant"))
 			nbDescendants += nbRecu + 1
 		}
-		stderr.Println(Nom, "Je reduit mon nombre de voisins", nbVoisinsAttendus)
 		if nbVoisinsAttendus == 0 {
 			if elu == MyId {
 
 				win = true
 				NbSites = nbDescendants + 1
-				stderr.Println(Nom, "J'ai gagné", NbSites)
+				stderr.Println(cyan, "["+Nom+"]", "Mes enfants sont", enfants, raz)
+				stderr.Println(orange, "["+Nom+"]", "J'ai gagné, le nombre de site est :", NbSites, raz)
 			} else {
 				// j'envoie à mon parent mon nombre de descendants
 				envoyerAuParent(electionInit, rouge, strconv.Itoa(elu), nbDescendants)
+				if len(enfants) != 0 {
+					stderr.Println(cyan, "["+Nom+"]", "Mes enfants sont", enfants, raz)
+				} else {
+					stderr.Println(cyan, "["+Nom+"]", "Je n'ai pas d'enfant", raz)
+				}
 			}
 		}
 	}
@@ -89,7 +95,7 @@ func recevoirMessageElectionInit(msg string) {
 		// Ce message ne m'était pas déstiné
 		return
 	}
-	stderr.Println(Nom, "recevoir", msg)
+
 	switch findval(msg, MsgType) {
 	case bleu:
 		RecevoirMessageBleuInit(msg)
@@ -104,7 +110,7 @@ func recevoirMessageElectionInit(msg string) {
 
 func envoyerAuxVoisinsSauf(msgCat string, couleur string, data string, saufVoisin int) {
 	if !slices.Contains(ListVoisins, saufVoisin) {
-		stderr.Println(red, Nom, "Voisin non présent dans la liste", saufVoisin, ListVoisins, raz)
+		stderr.Println(rouge, "["+Nom+"]", "Voisin non présent dans la liste", saufVoisin, ListVoisins, raz)
 		return
 	}
 	vIndex := slices.Index(ListVoisins, saufVoisin)
