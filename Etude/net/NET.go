@@ -497,7 +497,7 @@ func main() {
 			rcvmsg = ""
 		}
 	}
-	stderr.Println(rougec, "["+Nom+"]", "Fin du NET", raz)
+	stderr.Println(rougec, "["+Nom+"]", "Fin du NET\n", raz)
 	for {
 		fmt.Scanln(&rcvmsg)
 		rcvmsg = ""
