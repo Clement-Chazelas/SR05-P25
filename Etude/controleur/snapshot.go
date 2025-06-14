@@ -28,6 +28,7 @@ var vectorClock []int = make([]int, NbSite)
 
 // Indice du dernier controlleur ajouté
 var newContIndex = -1
+var quitContIndex = -1
 
 var localSnapshot Snapshot       // Snapshot locale du controleur
 var myColor string = "white"     // Couleur du controleur
@@ -151,7 +152,9 @@ func ReceiveStateMessage(msg string) {
 	// Récupération du nom de l'expéditeur pour en déduire son ID (indice dans liste Noms)
 	sender := findval(msg, MsgSender)
 	sdrId := sort.SearchStrings(Sites, sender)
-
+	if len(rcvSnap.LocalState) == 0 {
+		stderr.Println(Nom, "Erreur, snapshot vide", msg)
+	}
 	// J'ajoute la blockchain reçue à ma snapshot locale (indice correspondant à l'ID)
 	localSnapshot.LocalState[sdrId] = rcvSnap.LocalState[0]
 	localSnapshot.VectorClock[sdrId] = rcvSnap.VectorClock[0]
@@ -188,9 +191,15 @@ func copyVectorClock(clock []int) []int {
 func mergeVectorClocks(vc1, vc2 []int) []int {
 	merged := make([]int, len(vc1))
 	if len(vc1) > len(vc2) {
+		stderr.Println(Nom, "l'horloge vectorielle 1 est plus grande que la 2", vc2)
 		// Ce message provient d'un site qui n'a pas encore mis à jour son horloge vectorielle
 		vc2 = addSiteToClock(vc2, newContIndex)
+	} else if len(vc1) < len(vc2) {
+		// Ce message provient d'un site qui n'a pas encore mis à jour son horloge vectorielle
+		stderr.Println(Nom, "l'horloge vectorielle 1 est plus petite que la 2", vc1)
+		vc2 = removeSiteFromClock(vc2, quitContIndex)
 	}
+
 	for i := range vc1 {
 		if vc1[i] > vc2[i] {
 			merged[i] = vc1[i]
@@ -215,6 +224,12 @@ func addSiteToClock(clock []int, index int) []int {
 	}
 	return newClock
 
+}
+
+func removeSiteFromClock(clock []int, index int) []int {
+	newClock := copyVectorClock(clock)
+	newClock = append(newClock[:index], newClock[index+1:]...)
+	return newClock
 }
 
 // ClockToStr convertit une horloge vectorielle en string (ex: "1,0,2")

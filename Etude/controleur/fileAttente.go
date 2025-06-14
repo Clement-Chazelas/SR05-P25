@@ -6,6 +6,7 @@ Il gère la coordination entre les applications pour l’accès exclusif à la s
 */
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -23,8 +24,8 @@ const (
 // messageFile correspond à un message utilisé par l'algo de la file d'attente répartie
 // Il possède un type et une date (estampille)
 type messageFile struct {
-	Type messageFileType // type du message
-	Date int             // estampille
+	Type messageFileType `json:"type"` // type du message
+	Date int             `json:"date"` // estampille
 }
 
 // Chaque site est identifié par son ID (index)
@@ -216,16 +217,35 @@ func isOldestRequest() bool {
 func addSiteToFile(newSiteIndex int) []messageFile {
 	newFile := make([]messageFile, NbSite)
 	copy(newFile, fileAtt)
-	// Si l'indice est à la fin de la slice, nous pouvons simplement utiliser append.
-	if newSiteIndex == len(fileAtt) {
-		newFile = append(newFile, messageFile{})
-	} else {
-
-		newFile = append(newFile, messageFile{})
+	// Si l'indice est à la fin de la slice, nous pouvons simplement retourner la file.
+	if newSiteIndex != len(fileAtt) {
 		copy(newFile[newSiteIndex+1:], newFile[newSiteIndex:])
 
 		newFile[newSiteIndex] = messageFile{}
 	}
 
 	return newFile
+}
+
+func removeSiteFromFile(siteIndex int) []messageFile {
+	newFile := make([]messageFile, NbSite)
+	newFile = append(fileAtt[:siteIndex], fileAtt[siteIndex+1:]...)
+	return newFile
+}
+
+func sendFileAtt(msg []messageFile) string {
+	jsonData, err := json.Marshal(msg)
+	if err != nil {
+		return ""
+	}
+	return string(jsonData)
+}
+
+func receiveFileAtt(jsonString string) []messageFile {
+	var msg []messageFile
+	err := json.Unmarshal([]byte(jsonString), &msg)
+	if err != nil {
+		return []messageFile{}
+	}
+	return msg
 }

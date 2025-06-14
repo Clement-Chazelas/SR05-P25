@@ -17,6 +17,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Caractères utilisés pour formater les messages entre les sites
@@ -59,6 +60,7 @@ const (
 	file          string = "file"
 	snapshot      string = "snapshot"
 	newSite       string = "newsite"
+	leave         string = "lve"
 )
 
 // MsgFormat construit une partie de message formatée avec une clé et une valeur
@@ -134,6 +136,7 @@ func initialisation() {
 	display_d("initialisation", "Fin")
 
 	fmt.Printf("Controleurs:%s\n", strings.Join(Sites, ","))
+	fmt.Printf("Queue:%s\n", sendFileAtt(fileAtt))
 	// Envoi du signal de départ à l'application
 	fmt.Printf("CONT:start:%d\n", NbSite)
 
@@ -158,16 +161,24 @@ func initialisationNouveauSite() {
 		if rcvmsg[:11] == "controleur:" {
 			Sites = strings.Split(rcvmsg[11:], ",")
 			Sites = append(Sites, Nom)
+			MyId = sort.SearchStrings(Sites, Nom)
+			newContIndex = MyId
+
 		} else if rcvmsg[:6] == "queue:" {
-			//fileAtt = rcvmsg[6:]
-			//Faire fonction pourenvoyer et recevoir file d'attnte en JSON
+			fileAtt = receiveFileAtt(rcvmsg[6:])
+			fileAtt = addSiteToFile(MyId)
+			for _, msg := range fileAtt {
+				if msg.Date > estamp {
+					estamp = msg.Date + 1
+				}
+			}
 		} else if rcvmsg[:11] == "blockchain:" {
 			localBlockchain = ReceiveBlockchain(rcvmsg[11:])
 			break
 		}
 
 	}
-
+	display_w("Initialisation", "fin")
 	// Envoyer message de nouveau
 	newMsg := MsgFormat(MsgSender, Nom) + MsgFormat(MsgCategory, newSite)
 	fmt.Println(newMsg)
@@ -175,6 +186,7 @@ func initialisationNouveauSite() {
 	fmt.Printf("CONT:start:%d\n", NbSite)
 	fmt.Printf("CONT:blockchain:%s\n", SendBlockchain(localBlockchain.ToBlockchain()))
 
+	fmt.Println("FinInit")
 	return
 
 }
@@ -211,7 +223,21 @@ func main() {
 
 		fmt.Scanln(&rcvmsg)
 
-		// Le message ne débute pas par "NET:"
+		if rcvmsg == "fin" {
+			// Risque de blocage sinon
+			sendFileMessage(release)
+			newMsg := MsgFormat(MsgSender, Nom) + MsgFormat(MsgCategory, leave)
+			fmt.Println(newMsg)
+			break
+		}
+
+		if rcvmsg == "startSnapshot" {
+			//J'ai reçu le signal pour démarrer la snapshot
+			InitSnapshot()
+			continue
+		}
+
+		// Le message ne débute pas par "NET:" ou "APP:"
 		if rcvmsg[:4] != "NET:" && rcvmsg[:4] != "APP:" {
 			//Ce message n'était pas à destination du controlleur
 			rcvmsg = ""
@@ -220,16 +246,6 @@ func main() {
 
 		// Suppresion du préfixe "NET:"
 		rcvmsg = rcvmsg[4:]
-
-		if rcvmsg == "startSnapshot" {
-			//J'ai reçu le signal pour démarrer la snapshot
-			InitSnapshot()
-			continue
-		}
-
-		if rcvmsg[:8] == "newCont:" {
-
-		}
 
 		// Récupération de la catégorie du message
 		rcvCat := findval(rcvmsg, MsgCategory)
@@ -250,7 +266,7 @@ func main() {
 			case file:
 				// Traitement du message reçu par l'algorithme de la file d'attente
 				ReceiveFileMessage(rcvmsg)
-
+				fmt.Printf("Queue:%s\n", sendFileAtt(fileAtt))
 				break
 
 			case snapshot:
@@ -270,6 +286,7 @@ func main() {
 				}
 				break
 			case newSite:
+
 				NbSite++
 				newName := findval(rcvmsg, MsgSender)
 				Sites = append(Sites, newName)
@@ -280,13 +297,41 @@ func main() {
 				fileAtt = addSiteToFile(newContIndex)
 				vectorClock = addSiteToClock(vectorClock, newContIndex)
 
+				// On envoi la liste des noms et file att maj
 				fmt.Printf("Controleurs:%s\n", strings.Join(Sites, ","))
-				// Envoyer file att
-				continue
+				fmt.Printf("Queue:%s\n", sendFileAtt(fileAtt))
+
+				display_d("Nouveau site", newName)
+				break
+
+			case leave:
+				NbSite--
+
+				quitSite := findval(rcvmsg, MsgSender)
+				quitContIndex = sort.SearchStrings(Sites, quitSite)
+
+				Sites = append(Sites[:quitContIndex], Sites[quitContIndex+1:]...)
+
+				display_w("Depart", quitSite)
+				//stderr.Println(Nom, "New site list", Sites)
+
+				MyId = sort.SearchStrings(Sites, Nom)
+				fileAtt = removeSiteFromFile(quitContIndex)
+				vectorClock = removeSiteFromClock(vectorClock, quitContIndex)
+
+				fmt.Printf("Controleurs:%s\n", strings.Join(Sites, ","))
+				fmt.Printf("Queue:%s\n", sendFileAtt(fileAtt))
+
+				time.Sleep(time.Duration(5) * time.Second)
+				break
 			}
 		} else {
 			//Le message vient de l'application
-
+			if len(rcvmsg) < 5 {
+				stderr.Println(Nom, "Message trop court", rcvmsg)
+				rcvmsg = ""
+				continue
+			}
 			if rcvmsg[:5] == "FILE:" {
 				// Ce message concerne la section critique
 				ReceiveSC(rcvmsg[5:])
@@ -319,6 +364,14 @@ func main() {
 		}
 		rcvmsg = ""
 
+	}
+
+	stderr.Println(rouge, Nom, "Fin du programme", raz)
+	time.Sleep(time.Duration(500) * time.Millisecond)
+	fmt.Println("fin")
+	for {
+		fmt.Scanln(&rcvmsg)
+		rcvmsg = ""
 	}
 }
 
