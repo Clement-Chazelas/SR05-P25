@@ -26,9 +26,8 @@ const (
 // Horloge vectorielle du controleur
 var vectorClock []int = make([]int, NbSite)
 
-// Indice du dernier controlleur ajouté
-var newContIndex = -1
-var quitContIndex = -1
+var newContIndex = -1  // Indice du dernier contrôleur ayant rejoint le réseau
+var quitContIndex = -1 // Indice du dernier contrôleur ayant quitté le réseau
 
 var localSnapshot Snapshot       // Snapshot locale du controleur
 var myColor string = "white"     // Couleur du controleur
@@ -190,6 +189,10 @@ func copyVectorClock(clock []int) []int {
 // Incrémente la ligne correspondant au controleur.
 func mergeVectorClocks(vc1, vc2 []int) []int {
 	merged := make([]int, len(vc1))
+
+	// Il est possible que l'horloge reçue ne soit pas de la même taille que celle du contrôleur
+	// Dans ce cas là, l'horloge vectorielle reçu est mise à jour grâce à l'index sauvegardé du dernier site
+	// arrivé/partant
 	if len(vc1) > len(vc2) {
 		stderr.Println(Nom, "l'horloge vectorielle 1 est plus grande que la 2", vc2)
 		// Ce message provient d'un site qui n'a pas encore mis à jour son horloge vectorielle
@@ -211,12 +214,15 @@ func mergeVectorClocks(vc1, vc2 []int) []int {
 	return merged
 }
 
+// addSiteToClock permet d'ajouter une case à l'horloge vectorielle à l'indice précisé
 func addSiteToClock(clock []int, index int) []int {
 	newClock := copyVectorClock(clock)
-
+	// L'indice est à la fin de l'horloge
 	if index == len(clock) {
+		// Il suffit d'ajouter une case
 		newClock = append(newClock, 0)
 	} else {
+		// Sinon, on décale les cases suivantes
 		newClock = append(newClock, 0)
 
 		copy(newClock[index+1:], newClock[index:])
@@ -226,6 +232,7 @@ func addSiteToClock(clock []int, index int) []int {
 
 }
 
+// removeSiteFromClock permet de retirer une case à l'horloge vectorielle à l'indice précisé
 func removeSiteFromClock(clock []int, index int) []int {
 	newClock := copyVectorClock(clock)
 	newClock = append(newClock[:index], newClock[index+1:]...)

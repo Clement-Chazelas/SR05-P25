@@ -214,11 +214,13 @@ func isOldestRequest() bool {
 	return true
 }
 
+// addSiteToFile permet d'ajouter une case à la file d'attente à l'index précisé
 func addSiteToFile(newSiteIndex int) []messageFile {
 	newFile := make([]messageFile, NbSite)
 	copy(newFile, fileAtt)
 	// Si l'indice est à la fin de la slice, nous pouvons simplement retourner la file.
 	if newSiteIndex != len(fileAtt) {
+		// Sinon, il faut décaler les cases suivantes
 		copy(newFile[newSiteIndex+1:], newFile[newSiteIndex:])
 
 		newFile[newSiteIndex] = messageFile{}
@@ -227,12 +229,14 @@ func addSiteToFile(newSiteIndex int) []messageFile {
 	return newFile
 }
 
+// removeSiteFromFile permet de supprimer une case à la file d'attente à l'index précisé
 func removeSiteFromFile(siteIndex int) []messageFile {
 	newFile := make([]messageFile, NbSite)
 	newFile = append(fileAtt[:siteIndex], fileAtt[siteIndex+1:]...)
 	return newFile
 }
 
+// sendFileAtt permet de transformer une file d'attente en string pour pouvoir l'envoyer en message.
 func sendFileAtt(msg []messageFile) string {
 	jsonData, err := json.Marshal(msg)
 	if err != nil {
@@ -241,6 +245,7 @@ func sendFileAtt(msg []messageFile) string {
 	return string(jsonData)
 }
 
+// receiveFileAtt permet de récuperer une file d'attente d'un string à la réception d'un message.
 func receiveFileAtt(jsonString string) []messageFile {
 	var msg []messageFile
 	err := json.Unmarshal([]byte(jsonString), &msg)

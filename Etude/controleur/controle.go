@@ -5,8 +5,8 @@ Ce fichier contient les variables et les fonctions propres au fonctionnement d'u
 Le controleur joue un rôle de médiateur entre l'application (app) et les autres sites du réseau réparti.
 Gère la diffusion des messages, les filtres de réception, implémente l'algorithme de la file d'attente répartie
 ainsi que le déclenchement et la gestion de capture d'instantané (snapshot).
-Ce programme est fait pour fonctionner dans un anneau unidirectionnel. Chaque message reçu est donc relayé au site suivant.
-Pour éviter les doublons, le controleur ne traite pas les messages qu'il a lui-même envoyés.
+Le contrôleur s'occupe également d'envoyer à chaque modification une copie de la blockchain, de la file d'attente et
+de la liste des contrôleurs au NET.
 */
 
 import (
@@ -122,8 +122,6 @@ func initialisation() {
 
 		// Ajout du nom reçu dans la liste
 		Sites = append(Sites, rcvmsg)
-		// Je relaie le message reçu au site suivant
-		//fmt.Println(rcvmsg)
 	}
 
 	//Le tableau Sites est trié par ordre alphabétique
@@ -135,54 +133,66 @@ func initialisation() {
 
 	display_d("initialisation", "Fin")
 
+	// Envoie de la liste des contrôleurs au NET
 	fmt.Printf("Controleurs:%s\n", strings.Join(Sites, ","))
-	fmt.Printf("Queue:%s\n", sendFileAtt(fileAtt))
+
 	// Envoi du signal de départ à l'application
 	fmt.Printf("CONT:start:%d\n", NbSite)
 
 	return
 }
 
+// initialisationNouveauSite permet à un contrôleur de rejoindre un réseau de controleur déjà existant
 func initialisationNouveauSite() {
 	var rcvmsg string
 
+	// Création de l'horloge vectorielle
 	vectorClock = make([]int, NbSite)
 
 	for {
 		fmt.Scanln(&rcvmsg)
 
+		// Le message n'était pas destinée au contrôleur
 		if rcvmsg[:4] != "NET:" {
 			rcvmsg = ""
 			continue
 		}
-
+		// Suppression du préfix
 		rcvmsg = rcvmsg[4:]
 
+		// Reception de la liste des contrôleurs du NET
 		if rcvmsg[:11] == "controleur:" {
 			Sites = strings.Split(rcvmsg[11:], ",")
 			Sites = append(Sites, Nom)
 			MyId = sort.SearchStrings(Sites, Nom)
+			// ID du dernier site ajouté
 			newContIndex = MyId
 
 		} else if rcvmsg[:6] == "queue:" {
+			// Reception de la file d'attente envoyée par le NET
 			fileAtt = receiveFileAtt(rcvmsg[6:])
+			// Ajouter une case à la file d'attente (en fonction de mon ID)
 			fileAtt = addSiteToFile(MyId)
+			// Initialisation de mon estampille max(fileAttente) + 1
 			for _, msg := range fileAtt {
 				if msg.Date > estamp {
 					estamp = msg.Date + 1
 				}
 			}
 		} else if rcvmsg[:11] == "blockchain:" {
+			// Reception de la blockchain envoyée par le NET
 			localBlockchain = ReceiveBlockchain(rcvmsg[11:])
 			break
 		}
 
 	}
 	display_w("Initialisation", "fin")
-	// Envoyer message de nouveau
+
+	// Envoyer message pour indiquer son arrivée aux autres contrôleurs
 	newMsg := MsgFormat(MsgSender, Nom) + MsgFormat(MsgCategory, newSite)
 	fmt.Println(newMsg)
-	//Lancement de l'initialisation de l'app et envoi des infos nécessaires
+
+	//Lancement de l'initialisation de l'app et envoi de la blockchain
 	fmt.Printf("CONT:start:%d\n", NbSite)
 	fmt.Printf("CONT:blockchain:%s\n", SendBlockchain(localBlockchain.ToBlockchain()))
 
@@ -208,11 +218,13 @@ func main() {
 		fmt.Scanln(&rcvmsg)
 
 		if len(rcvmsg) > 10 && rcvmsg[:10] == "NET:start:" {
+			// Récupération du nombre de sites
 			NbSite, _ = strconv.Atoi(rcvmsg[10:])
 			break
 		}
 	}
-	// Lancement de l'initialisation des controleurs
+
+	// Lancement de l'initialisation des contrôleurs
 	if *pNouveauSite {
 		initialisationNouveauSite()
 	} else {
@@ -223,11 +235,14 @@ func main() {
 
 		fmt.Scanln(&rcvmsg)
 
+		// L'application m'indique la fin
 		if rcvmsg == "fin" {
-			// Risque de blocage sinon
+			// Envoi d'un release pour empêcher le blocage de la file d'attente
 			sendFileMessage(release)
+			// Envoi d'un message indiquant mon départ
 			newMsg := MsgFormat(MsgSender, Nom) + MsgFormat(MsgCategory, leave)
 			fmt.Println(newMsg)
+			// Arrêt de la boucle infinie
 			break
 		}
 
@@ -239,7 +254,7 @@ func main() {
 
 		// Le message ne débute pas par "NET:" ou "APP:"
 		if rcvmsg[:4] != "NET:" && rcvmsg[:4] != "APP:" {
-			//Ce message n'était pas à destination du controlleur
+			// Ce message n'était pas à destination du controlleur
 			rcvmsg = ""
 			continue
 		}
@@ -266,6 +281,7 @@ func main() {
 			case file:
 				// Traitement du message reçu par l'algorithme de la file d'attente
 				ReceiveFileMessage(rcvmsg)
+				// Envoi de la file d'attente au NET
 				fmt.Printf("Queue:%s\n", sendFileAtt(fileAtt))
 				break
 
@@ -285,43 +301,60 @@ func main() {
 					}
 				}
 				break
-			case newSite:
 
+			// Le message indique l'arrivée d'un nouveau contrôleur
+			case newSite:
+				// Maj du nombre de site
 				NbSite++
+				// Récupération du nom du nouveau site et ajout à la liste
 				newName := findval(rcvmsg, MsgSender)
 				Sites = append(Sites, newName)
 				sort.Strings(Sites)
+
+				// Récupération de mon nouvel ID (ordre alphabétique)
 				MyId = sort.SearchStrings(Sites, Nom)
 
+				// Sauvegarde de l'ID du nouveau site
 				newContIndex = sort.SearchStrings(Sites, newName)
+
+				// Agrandissement de la file d'attente et de l'horloge vectorielle en fonction de l'ID du nouveau
 				fileAtt = addSiteToFile(newContIndex)
 				vectorClock = addSiteToClock(vectorClock, newContIndex)
 
-				// On envoi la liste des noms et file att maj
+				// On envoie la nouvelle liste des noms et la file d'attente au NET
 				fmt.Printf("Controleurs:%s\n", strings.Join(Sites, ","))
 				fmt.Printf("Queue:%s\n", sendFileAtt(fileAtt))
 
 				display_d("Nouveau site", newName)
 				break
 
+			// Le message indique le départ d'un contrôleur
 			case leave:
+				// Maj du nombre de site
 				NbSite--
 
+				// Récupération du nom du site parant et de son ID
 				quitSite := findval(rcvmsg, MsgSender)
 				quitContIndex = sort.SearchStrings(Sites, quitSite)
 
+				// Suppression du site partant de la liste des controleurs
 				Sites = append(Sites[:quitContIndex], Sites[quitContIndex+1:]...)
 
 				display_w("Depart", quitSite)
 				//stderr.Println(Nom, "New site list", Sites)
 
+				// Récupération de mon nouvel ID
 				MyId = sort.SearchStrings(Sites, Nom)
+
+				// Réduction de la file d'attente et de l'horloge vectorielle en fonction de l'ID du partant
 				fileAtt = removeSiteFromFile(quitContIndex)
 				vectorClock = removeSiteFromClock(vectorClock, quitContIndex)
 
+				// On envoie la nouvelle liste des noms et la file d'attente au NET
 				fmt.Printf("Controleurs:%s\n", strings.Join(Sites, ","))
 				fmt.Printf("Queue:%s\n", sendFileAtt(fileAtt))
 
+				// Temps d'attente pour laisser la modification des fifo
 				time.Sleep(time.Duration(5) * time.Second)
 				break
 			}
@@ -365,11 +398,13 @@ func main() {
 		rcvmsg = ""
 
 	}
-
+	// Le contrôleur est terminé
 	stderr.Println(rouge, Nom, "Fin du programme", raz)
-	time.Sleep(time.Duration(500) * time.Millisecond)
+	time.Sleep(time.Duration(100) * time.Millisecond)
+	// Indique au NET de s'arrêter à son tour
 	fmt.Println("fin")
 	for {
+		// Lecture infinie pour ne pas bloquer la fifo
 		fmt.Scanln(&rcvmsg)
 		rcvmsg = ""
 	}
