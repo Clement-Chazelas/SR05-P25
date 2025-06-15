@@ -78,6 +78,9 @@ PID_N4=$!
 ./net/nett -n N5 < /tmp/in_N5 > /tmp/out_N5 2>> /tmp/affichage.log &
 PID_N5=$!
  
+# Lancement des processus de copies des messages entre fifo
+# Pour chaque site, le numéro de la fifo, les sites concernés par le tee et le PID du tee 
+# sont stockés dans un fichier $PID_NET.txt 
 cat /tmp/out_A1 > /tmp/in_C1 &
 cat /tmp/out_C1 | tee /tmp/in_A1 /tmp/in_N1 > /dev/null &
 cat /tmp/out_N1 | tee /tmp/in_C1 /tmp/in_N2 /tmp/in_N4 > /dev/null &
