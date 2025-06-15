@@ -120,18 +120,22 @@ func sendInitialisation(stop chan struct{}, fin chan struct{}) {
 	}
 }
 
+// sendInitialisationNouveauSite permet à une nouvelle application de rejoindre un réseau d'application
+// Récupère la blockchain transmise par le contrôleur et envoi sa clé dans le réseau.
 func sendInitialisationNouveauSite(stop chan struct{}, fin chan struct{}) {
 	var rcvmsg string
 
 	for {
 		fmt.Scanln(&rcvmsg)
 
+		// Le message ne m'était pas destiné
 		if rcvmsg[:5] != "CONT:" {
 			rcvmsg = ""
 			continue
 		}
 
 		rcvmsg = rcvmsg[5:]
+		// Récupération de la blockchain envoyée par le contrôleur
 		if rcvmsg[:11] == "blockchain:" {
 			rcvBlockchain := ReceiveBlockchain(rcvmsg[11:])
 			blockChain = rcvBlockchain.ToBlockchain()
@@ -146,6 +150,7 @@ func sendInitialisationNouveauSite(stop chan struct{}, fin chan struct{}) {
 
 	time.Sleep(time.Duration(1) * time.Second)
 
+	// Démarrage des goroutines de fonctionnement classique
 	go sendMain(stop, fin)
 	go receive(stop)
 
@@ -160,11 +165,12 @@ func sendMain(stop chan struct{}, fin chan struct{}) {
 	isSCAsked := false
 	for {
 		select {
-
+		// 	Receive indique l'arrêt des envois
 		case <-stop:
+			// Fermeture du canal de fin du programme
 			close(fin)
 			return
-
+		// Sinon
 		default:
 			// Si la liste des transactions en attente est non vide
 			if len(pendingTransactions) > 0 {
@@ -312,9 +318,11 @@ func receive(stop chan struct{}) {
 		fmt.Scanln(&rcvmsg)
 		mutex.Lock()
 
+		// Réception du message de fin
 		if rcvmsg == "fin" {
 			mutex.Unlock()
 			stderr.Println(Nom, "Signal de fin reçu")
+			// Fermeture de canal stop pour indiquer l'arrêt à la goroutine send
 			close(stop)
 			return
 		}
@@ -407,10 +415,8 @@ func receive(stop chan struct{}) {
 // Fonction principale de l'application, lancée à l'exécution du programme.
 func main() {
 	var rcvmsg string
-	// Canal indiquant la fin des goroutines (non implémenté)
-	stop := make(chan struct{})
-	fin := make(chan struct{})
-	var b chan bool
+	stop := make(chan struct{}) // Canal indiquant l'arrêt de l'envoi de message
+	fin := make(chan struct{})  // Canal indiquant l'arrêt de l'application
 
 	// Récupération du nom donnée par l'utilisateur et du mode verbose.
 	pNom := flag.String("n", "app", "Nom")
@@ -432,6 +438,7 @@ func main() {
 
 		if len(rcvmsg) > 11 && rcvmsg[:11] == "CONT:start:" {
 			// Le controleur a terminé son initialisation
+			// Récupération du nombre de sites
 			nbSite, _ = strconv.Atoi(rcvmsg[11:])
 			break
 		}
@@ -453,13 +460,9 @@ func main() {
 	stderr.Println("\n", rouge, Nom, "Fin de l'application", raz)
 	fmt.Println("fin")
 
-	go func() {
-		for {
-			a := 1
-			sleeptime := time.Duration(a) * time.Second
-			a++
-			time.Sleep(sleeptime)
-		}
-	}()
-	<-b
+	for {
+		// Lecture infinie pour ne pas bloquer la fifo
+		fmt.Scanln(&rcvmsg)
+		rcvmsg = ""
+	}
 }
