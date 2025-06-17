@@ -43,7 +43,7 @@ const (
 	MsgDestination = "dest"
 	MsgCategory    = "cat"
 	MsgData        = "dat"
-	MsgPath        = "pth"
+	MsgHist        = "pth"
 	MsgType        = "typ"
 	electionInit   = "eli"
 	election       = "elec"
@@ -262,7 +262,7 @@ func finaliserAdmission(senderID int) {
 
 	// Envoi d'une confirmation d'admission au reste du réseau, permettant de mettre à jour le nombre de sites
 	msg := MsgFormat(MsgSender, strconv.Itoa(MyId)) + MsgFormat(MsgCategory, admConfirm) +
-		MsgFormat(MsgPath, intTabToStr([]int{MyId, MyId})) +
+		MsgFormat(MsgHist, intTabToStr([]int{MyId, MyId})) +
 		MsgFormat(MsgData, strconv.Itoa(NbSites))
 
 	fmt.Println(msg)
@@ -273,7 +273,7 @@ func finaliserAdmission(senderID int) {
 // les messages soient traités en double.
 func majHistorique(msg string) string {
 	// Récupération de l'historique
-	hist := strToIntTab(findval(msg, MsgPath))
+	hist := strToIntTab(findval(msg, MsgHist))
 
 	if len(hist) < 2 {
 		stderr.Println(Nom, "Erreur, historique vide", hist)
@@ -284,7 +284,7 @@ func majHistorique(msg string) string {
 	hist[1] = MyId
 	// Formattage du nouveau message avec l'historique mis à jour
 	newMsg := MsgFormat(MsgSender, strconv.Itoa(MyId)) + MsgFormat(MsgCategory, findval(msg, MsgCategory)) +
-		MsgFormat(MsgPath, intTabToStr(hist)) + MsgFormat(MsgData, findval(msg, MsgData))
+		MsgFormat(MsgHist, intTabToStr(hist)) + MsgFormat(MsgData, findval(msg, MsgData))
 	return newMsg
 }
 
@@ -380,7 +380,7 @@ func main() {
 						if parent != MyId {
 							// J'envoie un message indiquant mon départ ainsi que mon parent et mes enfants
 							newMsg := MsgFormat(MsgSender, strconv.Itoa(MyId)) + MsgFormat(MsgCategory, outConfirm) +
-								MsgFormat(MsgPath, intTabToStr([]int{MyId, MyId})) +
+								MsgFormat(MsgHist, intTabToStr([]int{MyId, MyId})) +
 								MsgFormat("children", intTabToStr(enfants)) + MsgFormat("parent", strconv.Itoa(parent)) +
 								MsgFormat(MsgData, strconv.Itoa(MyId))
 							fmt.Println(newMsg)
@@ -394,7 +394,7 @@ func main() {
 						} else {
 							// Je suis la racine de l'arbre, j'indique mon premier enfant comme nouvelle racine
 							newMsg := MsgFormat(MsgSender, strconv.Itoa(MyId)) + MsgFormat(MsgCategory, outConfirm) +
-								MsgFormat(MsgPath, intTabToStr([]int{MyId, MyId})) +
+								MsgFormat(MsgHist, intTabToStr([]int{MyId, MyId})) +
 								MsgFormat("children", intTabToStr(enfants[1:])) + MsgFormat("parent", strconv.Itoa(enfants[0])) +
 								MsgFormat(MsgData, strconv.Itoa(MyId))
 							fmt.Println(newMsg)
@@ -405,6 +405,8 @@ func main() {
 								args = append(args, strconv.Itoa(v))
 							}
 						}
+
+						time.Sleep(time.Duration(50) * time.Millisecond)
 						// Execution du script pour les fifo
 						cmd := exec.Command("./quit.sh", args...)
 
@@ -427,7 +429,7 @@ func main() {
 
 			// Le message provient de mon parent ou de mes enfants
 			// Je récupère l'historique
-			msgHist := findval(rcvmsg, MsgPath)
+			msgHist := findval(rcvmsg, MsgHist)
 			hist := strToIntTab(msgHist)
 
 			// Si mon ID est dans l'historique, je ne traite pas le message
@@ -589,7 +591,7 @@ func main() {
 			// Je formate le message et l'envoi dans le réseau
 			newMessage := MsgFormat(MsgSender, strconv.Itoa(MyId)) +
 				MsgFormat(MsgCategory, controleur) +
-				MsgFormat(MsgPath, intTabToStr([]int{MyId, MyId})) +
+				MsgFormat(MsgHist, intTabToStr([]int{MyId, MyId})) +
 				MsgFormat(MsgData, rcvmsg)
 			fmt.Println(newMessage)
 
