@@ -437,7 +437,7 @@ func main() {
 		fmt.Scanln(&rcvmsg)
 
 		if len(rcvmsg) > 11 && rcvmsg[:11] == "CONT:start:" {
-			// Le controleur a terminé son initialisation
+			// Le contrôleur a terminé son initialisation
 			// Récupération du nombre de sites
 			nbSite, _ = strconv.Atoi(rcvmsg[11:])
 			break
